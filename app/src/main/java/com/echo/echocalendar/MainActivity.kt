@@ -4,13 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.echo.echocalendar.ui.demo.CalendarViewModelFactory
+import com.echo.echocalendar.ui.demo.SearchDemoScreen
+import com.echo.echocalendar.ui.demo.SearchViewModelFactory
 import com.echo.echocalendar.ui.theme.EchoCalendarTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,29 +16,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             EchoCalendarTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                val container = (application as EchoCalendarApplication).container
+                val searchViewModel = viewModel(
+                    factory = SearchViewModelFactory(container.searchEventsUseCase)
+                )
+                val calendarViewModel = viewModel(
+                    factory = CalendarViewModelFactory(container.getEventsByDateUseCase)
+                )
+                SearchDemoScreen(
+                    searchViewModel = searchViewModel,
+                    calendarViewModel = calendarViewModel
+                )
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    EchoCalendarTheme {
-        Greeting("Android")
     }
 }
