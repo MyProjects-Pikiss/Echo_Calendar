@@ -9,7 +9,13 @@ import androidx.room.Transaction
 @Dao
 interface EventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(event: EventEntity)
+    suspend fun insert(event: EventEntity)
+
+    @Transaction
+    suspend fun upsert(event: EventEntity) {
+        CategoryDefaults.requireValidCategoryId(event.categoryId)
+        insert(event)
+    }
 
     @Transaction
     suspend fun insertAll(events: List<EventEntity>) {
