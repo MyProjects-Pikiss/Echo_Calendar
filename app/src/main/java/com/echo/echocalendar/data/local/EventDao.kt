@@ -37,4 +37,10 @@ interface EventDao {
             "ORDER BY Event.occurredAt DESC, Event.updatedAt DESC"
     )
     suspend fun fullTextSearch(query: String): List<EventEntity>
+
+    @Query(
+        "SELECT * FROM Event WHERE occurredAt BETWEEN :start AND :end " +
+            "ORDER BY occurredAt DESC, updatedAt DESC"
+    )
+    suspend fun getByOccurredAtRange(start: Long, end: Long): List<EventEntity>
 }
