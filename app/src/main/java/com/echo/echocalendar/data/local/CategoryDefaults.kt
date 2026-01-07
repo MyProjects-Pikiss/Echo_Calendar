@@ -18,4 +18,10 @@ object CategoryDefaults {
         CategoryEntity(id = "record", displayName = "기록", sortOrder = 14),
         CategoryEntity(id = "other", displayName = "기타", sortOrder = 15)
     )
+
+    val categoryIds: Set<String> = categories.map { it.id }.toSet()
+
+    fun requireValidCategoryId(categoryId: String) {
+        require(categoryId in categoryIds) { "Unknown categoryId: $categoryId" }
+    }
 }
