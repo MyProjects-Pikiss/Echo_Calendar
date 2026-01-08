@@ -15,8 +15,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.echo.echocalendar.ui.demo.CalendarViewModel
 import com.echo.echocalendar.ui.demo.CalendarViewModelFactory
 import com.echo.echocalendar.ui.demo.MonthCalendarScreen
+import com.echo.echocalendar.ui.demo.SearchViewModel
 import com.echo.echocalendar.ui.demo.SearchDemoScreen
 import com.echo.echocalendar.ui.demo.SearchViewModelFactory
 import com.echo.echocalendar.ui.theme.EchoCalendarTheme
@@ -28,10 +30,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             EchoCalendarTheme {
                 val container = (application as EchoCalendarApplication).container
-                val searchViewModel = viewModel(
+                val searchViewModel = viewModel<SearchViewModel>(
                     factory = SearchViewModelFactory(container.searchEventsUseCase)
                 )
-                val calendarViewModel = viewModel(
+                val calendarViewModel = viewModel<CalendarViewModel>(
                     factory = CalendarViewModelFactory(container.getEventsByDateUseCase)
                 )
                 var selectedTab by remember { mutableIntStateOf(0) }
