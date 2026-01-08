@@ -11,7 +11,6 @@ data class EventFtsEntity(
     @PrimaryKey
     @ColumnInfo(name = "rowid")
     val rowId: Long,
-    val eventId: String,
     val summary: String,
     val body: String,
     val placeText: String?
