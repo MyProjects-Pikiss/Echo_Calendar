@@ -1,6 +1,7 @@
 package com.echo.echocalendar
 
 import android.app.Application
+import com.echo.echocalendar.BuildConfig
 import com.echo.echocalendar.data.seed.DebugSeedData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
