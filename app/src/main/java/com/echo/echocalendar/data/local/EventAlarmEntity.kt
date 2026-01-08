@@ -2,10 +2,14 @@ package com.echo.echocalendar.data.local
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "EventAlarm",
+    indices = [
+        Index(value = ["eventId"])
+    ],
     foreignKeys = [
         ForeignKey(
             entity = EventEntity::class,
