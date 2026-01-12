@@ -32,6 +32,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -252,7 +254,12 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
-                    val scale = if (isSelected) 1.15f else 1f
+                    val targetScale = if (isSelected) 1.18f else 1f
+                    val scale by animateFloatAsState(
+                        targetValue = targetScale,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
+                        label = "dateScale"
+                    )
                     val holidayLabel = holidayLabel(date)
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
