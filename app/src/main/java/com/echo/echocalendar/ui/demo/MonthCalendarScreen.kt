@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -138,8 +139,11 @@ fun MonthCalendarScreen(
                 selectedDate = calendarViewModel.selectedDate,
                 eventsByDate = calendarViewModel.eventsByDate,
                 onDateClick = {
-                    calendarViewModel.onDateSelected(it)
-                    isEventDialogOpen = true
+                    if (it == calendarViewModel.selectedDate) {
+                        isEventDialogOpen = true
+                    } else {
+                        calendarViewModel.onDateSelected(it)
+                    }
                 }
             )
         }
@@ -218,6 +222,7 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
+                    val scale = if (isSelected) 1.08f else 1f
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                     } else {
@@ -231,8 +236,9 @@ private fun MonthGrid(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(1f)
-                            .padding(2.dp)
+                            .aspectRatio(0.9f)
+                            .padding(1.dp)
+                            .scale(scale)
                             .clickable { onDateClick(date) },
                         border = border
                     ) {
@@ -250,7 +256,7 @@ private fun MonthGrid(
                                 Text(
                                     text = date.dayOfMonth.toString(),
                                     modifier = Modifier.alpha(if (isInMonth) 1f else 0.4f),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 val dayEvents = eventsByDate[date].orEmpty()
