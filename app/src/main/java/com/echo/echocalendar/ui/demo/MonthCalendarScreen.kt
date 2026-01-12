@@ -34,14 +34,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.MonthDay
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -202,6 +204,34 @@ fun MonthCalendarScreen(
     }
 }
 
+private val fixedHolidays = mapOf(
+    MonthDay.of(1, 1) to "신정",
+    MonthDay.of(3, 1) to "삼일절",
+    MonthDay.of(5, 5) to "어린이날",
+    MonthDay.of(6, 6) to "현충일",
+    MonthDay.of(8, 15) to "광복절",
+    MonthDay.of(10, 3) to "개천절",
+    MonthDay.of(10, 9) to "한글날",
+    MonthDay.of(12, 25) to "크리스마스"
+)
+
+private fun holidayLabel(date: LocalDate): String? = fixedHolidays[MonthDay.from(date)]
+
+@Composable
+private fun dayTextColor(
+    date: LocalDate,
+    isInMonth: Boolean,
+    holidayLabel: String?
+): Color {
+    val baseAlpha = if (isInMonth) 1f else 0.4f
+    val baseColor = when {
+        holidayLabel != null || date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFE53935)
+        date.dayOfWeek == DayOfWeek.SATURDAY -> Color(0xFF1E5AFF)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    return baseColor.copy(alpha = baseAlpha)
+}
+
 @Composable
 private fun MonthGrid(
     month: YearMonth,
@@ -222,7 +252,8 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
-                    val scale = if (isSelected) 1.08f else 1f
+                    val scale = if (isSelected) 1.15f else 1f
+                    val holidayLabel = holidayLabel(date)
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                     } else {
@@ -236,9 +267,10 @@ private fun MonthGrid(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(0.9f)
+                            .aspectRatio(0.85f)
                             .padding(1.dp)
                             .scale(scale)
+                            .zIndex(if (isSelected) 1f else 0f)
                             .clickable { onDateClick(date) },
                         border = border
                     ) {
@@ -255,9 +287,9 @@ private fun MonthGrid(
                             ) {
                                 Text(
                                     text = date.dayOfMonth.toString(),
-                                    modifier = Modifier.alpha(if (isInMonth) 1f else 0.4f),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = dayTextColor(date, isInMonth, holidayLabel)
                                 )
                                 val dayEvents = eventsByDate[date].orEmpty()
                                 if (dayEvents.isNotEmpty()) {
@@ -272,6 +304,15 @@ private fun MonthGrid(
                                             )
                                     )
                                 }
+                            }
+                            if (holidayLabel != null) {
+                                Text(
+                                    text = holidayLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFE53935),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             val dayEvents = eventsByDate[date].orEmpty()
                             if (isInMonth && dayEvents.isNotEmpty()) {
