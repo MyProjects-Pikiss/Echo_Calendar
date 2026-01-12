@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,12 +34,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.MonthDay
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -55,6 +60,7 @@ fun MonthCalendarScreen(
     val initialMonth = remember { YearMonth.from(calendarViewModel.selectedDate) }
     var shownMonth by remember { mutableStateOf(initialMonth) }
     var isJumpDialogOpen by remember { mutableStateOf(false) }
+    var isEventDialogOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
 
     LaunchedEffect(pagerState.currentPage) {
@@ -72,9 +78,10 @@ fun MonthCalendarScreen(
         if (pagerState.currentPage != targetPage) {
             pagerState.scrollToPage(targetPage)
         }
+        calendarViewModel.onMonthShown(shownMonth)
     }
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -123,45 +130,24 @@ fun MonthCalendarScreen(
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
         ) { page ->
             val month = initialMonth.plusMonths((page - 1200).toLong())
             MonthGrid(
                 month = month,
                 today = today,
                 selectedDate = calendarViewModel.selectedDate,
-                onDateClick = calendarViewModel::onDateSelected
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Column {
-            if (calendarViewModel.eventsOfDay.isEmpty()) {
-                Text(text = "해당 날짜의 이벤트가 없습니다.")
-            } else {
-                calendarViewModel.eventsOfDay.forEach { event ->
-                    val eventDate = Instant.ofEpochMilli(event.occurredAt)
-                        .atZone(zoneId)
-                        .toLocalDate()
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(text = event.summary, style = MaterialTheme.typography.titleSmall)
-                            Text(text = eventDate.format(dateFormatter))
-                            event.placeText?.let { place ->
-                                Text(text = place)
-                            }
-                        }
+                eventsByDate = calendarViewModel.eventsByDate,
+                onDateClick = {
+                    if (it == calendarViewModel.selectedDate) {
+                        isEventDialogOpen = true
+                    } else {
+                        calendarViewModel.onDateSelected(it)
                     }
                 }
-            }
+            )
         }
     }
 
@@ -175,6 +161,75 @@ fun MonthCalendarScreen(
             }
         )
     }
+
+    if (isEventDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isEventDialogOpen = false },
+            confirmButton = {
+                TextButton(onClick = { isEventDialogOpen = false }) {
+                    Text(text = "닫기")
+                }
+            },
+            title = {
+                Text(text = calendarViewModel.selectedDate.format(dateFormatter))
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (calendarViewModel.eventsOfDay.isEmpty()) {
+                        Text(text = "해당 날짜의 이벤트가 없습니다.")
+                    } else {
+                        calendarViewModel.eventsOfDay.forEach { event ->
+                            val eventDate = Instant.ofEpochMilli(event.occurredAt)
+                                .atZone(zoneId)
+                                .toLocalDate()
+                            Card(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = event.summary,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(text = eventDate.format(dateFormatter))
+                                    event.placeText?.let { place ->
+                                        Text(text = place)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+
+private val fixedHolidays = mapOf(
+    MonthDay.of(1, 1) to "신정",
+    MonthDay.of(3, 1) to "삼일절",
+    MonthDay.of(5, 5) to "어린이날",
+    MonthDay.of(6, 6) to "현충일",
+    MonthDay.of(8, 15) to "광복절",
+    MonthDay.of(10, 3) to "개천절",
+    MonthDay.of(10, 9) to "한글날",
+    MonthDay.of(12, 25) to "크리스마스"
+)
+
+private fun holidayLabel(date: LocalDate): String? = fixedHolidays[MonthDay.from(date)]
+
+@Composable
+private fun dayTextColor(
+    date: LocalDate,
+    isInMonth: Boolean,
+    holidayLabel: String?
+): Color {
+    val baseAlpha = if (isInMonth) 1f else 0.4f
+    val baseColor = when {
+        holidayLabel != null || date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFE53935)
+        date.dayOfWeek == DayOfWeek.SATURDAY -> Color(0xFF1E5AFF)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    return baseColor.copy(alpha = baseAlpha)
 }
 
 @Composable
@@ -182,6 +237,7 @@ private fun MonthGrid(
     month: YearMonth,
     today: LocalDate,
     selectedDate: LocalDate,
+    eventsByDate: Map<LocalDate, List<com.echo.echocalendar.data.local.EventEntity>>,
     onDateClick: (LocalDate) -> Unit
 ) {
     val firstDay = remember(month) { month.atDay(1) }
@@ -196,6 +252,8 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
+                    val scale = if (isSelected) 1.15f else 1f
+                    val holidayLabel = holidayLabel(date)
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                     } else {
@@ -209,25 +267,71 @@ private fun MonthGrid(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(1f)
-                            .padding(2.dp)
+                            .aspectRatio(0.85f)
+                            .padding(1.dp)
+                            .scale(scale)
+                            .zIndex(if (isSelected) 1f else 0f)
                             .clickable { onDateClick(date) },
                         border = border
                     ) {
-                        Box(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .background(background),
-                            contentAlignment = Alignment.TopStart
+                                .fillMaxSize()
+                                .background(background)
+                                .padding(6.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = date.dayOfMonth.toString(),
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .alpha(if (isInMonth) 1f else 0.4f),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = date.dayOfMonth.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = dayTextColor(date, isInMonth, holidayLabel)
+                                )
+                                val dayEvents = eventsByDate[date].orEmpty()
+                                if (dayEvents.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Box(
+                                        modifier = Modifier
+                                            .height(6.dp)
+                                            .aspectRatio(1f)
+                                            .background(
+                                                MaterialTheme.colorScheme.primary,
+                                                shape = MaterialTheme.shapes.small
+                                            )
+                                    )
+                                }
+                            }
+                            if (holidayLabel != null) {
+                                Text(
+                                    text = holidayLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFE53935),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            val dayEvents = eventsByDate[date].orEmpty()
+                            if (isInMonth && dayEvents.isNotEmpty()) {
+                                val summary = dayEvents.first().summary
+                                Column {
+                                    Text(
+                                        text = summary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (dayEvents.size > 1) {
+                                        Text(
+                                            text = "+${dayEvents.size - 1}개",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
