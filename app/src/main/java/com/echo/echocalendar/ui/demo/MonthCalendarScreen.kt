@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.AlertDialog
@@ -27,13 +29,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -59,10 +60,11 @@ fun MonthCalendarScreen(
     val today = remember { LocalDate.now(zoneId) }
     val monthFormatter = remember { DateTimeFormatter.ofPattern("yyyy년 M월") }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val initialMonth = remember { YearMonth.from(calendarViewModel.selectedDate) }
     var shownMonth by remember { mutableStateOf(initialMonth) }
     var isJumpDialogOpen by remember { mutableStateOf(false) }
-    var isEventDialogOpen by remember { mutableStateOf(false) }
+    var selectedEvent by remember { mutableStateOf<com.echo.echocalendar.data.local.EventEntity?>(null) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
 
     LaunchedEffect(pagerState.currentPage) {
@@ -143,10 +145,51 @@ fun MonthCalendarScreen(
                 selectedDate = calendarViewModel.selectedDate,
                 eventsByDate = calendarViewModel.eventsByDate,
                 onDateClick = {
-                    if (it == calendarViewModel.selectedDate) {
-                        isEventDialogOpen = true
-                    } else {
-                        calendarViewModel.onDateSelected(it)
+                    calendarViewModel.onDateSelected(it)
+                }
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if (calendarViewModel.eventsOfDay.isEmpty()) {
+            Text(text = "해당 날짜의 이벤트가 없습니다.")
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp, max = 220.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(calendarViewModel.eventsOfDay) { event ->
+                    val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedEvent = event }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = event.summary,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = timeFormatter.format(eventDateTime),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
                 }
             )
@@ -164,42 +207,36 @@ fun MonthCalendarScreen(
         )
     }
 
-    if (isEventDialogOpen) {
+    selectedEvent?.let { event ->
         AlertDialog(
-            onDismissRequest = { isEventDialogOpen = false },
+            onDismissRequest = { selectedEvent = null },
             confirmButton = {
-                TextButton(onClick = { isEventDialogOpen = false }) {
+                TextButton(onClick = { selectedEvent = null }) {
                     Text(text = "닫기")
                 }
             },
             title = {
-                Text(text = calendarViewModel.selectedDate.format(dateFormatter))
+                Text(text = "이벤트 상세")
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (calendarViewModel.eventsOfDay.isEmpty()) {
-                        Text(text = "해당 날짜의 이벤트가 없습니다.")
-                    } else {
-                        calendarViewModel.eventsOfDay.forEach { event ->
-                            val eventDate = Instant.ofEpochMilli(event.occurredAt)
-                                .atZone(zoneId)
-                                .toLocalDate()
-                            Card(
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = event.summary,
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(text = eventDate.format(dateFormatter))
-                                    event.placeText?.let { place ->
-                                        Text(text = place)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    val occurredAt = Instant.ofEpochMilli(event.occurredAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    val createdAt = Instant.ofEpochMilli(event.createdAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    val updatedAt = Instant.ofEpochMilli(event.updatedAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    Text(text = "ID: ${event.id}")
+                    Text(text = "카테고리: ${event.categoryId}")
+                    Text(text = "일시: ${occurredAt.format(dateFormatter)} ${occurredAt.format(timeFormatter)}")
+                    Text(text = "제목: ${event.summary}")
+                    Text(text = "장소: ${event.placeText ?: "없음"}")
+                    Text(text = "내용: ${event.body.ifBlank { "없음" }}")
+                    Text(text = "생성: ${createdAt.format(dateFormatter)} ${createdAt.format(timeFormatter)}")
+                    Text(text = "수정: ${updatedAt.format(dateFormatter)} ${updatedAt.format(timeFormatter)}")
                 }
             }
         )
@@ -254,12 +291,7 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
-                    val targetScale = if (isSelected) 1.32f else 1f
-                    val scale by animateFloatAsState(
-                        targetValue = targetScale,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
-                        label = "dateScale"
-                    )
+                    val scale = if (isSelected) 1.15f else 1f
                     val holidayLabel = holidayLabel(date)
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
@@ -274,7 +306,7 @@ private fun MonthGrid(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(0.85f)
+                            .aspectRatio(0.75f)
                             .padding(1.dp)
                             .scale(scale)
                             .zIndex(if (isSelected) 1f else 0f)
