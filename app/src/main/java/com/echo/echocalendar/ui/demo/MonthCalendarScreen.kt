@@ -254,7 +254,7 @@ private fun MonthGrid(
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
-                    val targetScale = if (isSelected) 1.18f else 1f
+                    val targetScale = if (isSelected) 1.32f else 1f
                     val scale by animateFloatAsState(
                         targetValue = targetScale,
                         animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
