@@ -36,7 +36,8 @@ class MainActivity : ComponentActivity() {
                 val calendarViewModel = viewModel<CalendarViewModel>(
                     factory = CalendarViewModelFactory(
                         container.getEventsByDateUseCase,
-                        container.getEventsByMonthUseCase
+                        container.getEventsByMonthUseCase,
+                        container.saveEventUseCase
                     )
                 )
                 var selectedTab by remember { mutableIntStateOf(0) }

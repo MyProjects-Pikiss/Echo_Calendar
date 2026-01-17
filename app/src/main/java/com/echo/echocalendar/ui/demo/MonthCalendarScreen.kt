@@ -25,10 +25,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,7 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.MonthDay
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -61,10 +64,19 @@ fun MonthCalendarScreen(
     val monthFormatter = remember { DateTimeFormatter.ofPattern("yyyy년 M월") }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val inputTimeFormatter = remember { DateTimeFormatter.ofPattern("H:mm") }
     val initialMonth = remember { YearMonth.from(calendarViewModel.selectedDate) }
     var shownMonth by remember { mutableStateOf(initialMonth) }
     var isJumpDialogOpen by remember { mutableStateOf(false) }
     var selectedEvent by remember { mutableStateOf<com.echo.echocalendar.data.local.EventEntity?>(null) }
+    var isAddDialogOpen by remember { mutableStateOf(false) }
+    var newSummary by remember { mutableStateOf("") }
+    var newTime by remember { mutableStateOf("09:00") }
+    var newCategoryId by remember { mutableStateOf("life") }
+    var newPlaceText by remember { mutableStateOf("") }
+    var newBody by remember { mutableStateOf("") }
+    var newLabels by remember { mutableStateOf("") }
+    var addEventError by remember { mutableStateOf<String?>(null) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
 
     LaunchedEffect(pagerState.currentPage) {
@@ -155,6 +167,24 @@ fun MonthCalendarScreen(
             style = MaterialTheme.typography.titleMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = {
+                newSummary = ""
+                newTime = "09:00"
+                newCategoryId = "life"
+                newPlaceText = ""
+                newBody = ""
+                newLabels = ""
+                addEventError = null
+                isAddDialogOpen = true
+            }) {
+                Text(text = "이벤트 추가")
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         if (calendarViewModel.eventsOfDay.isEmpty()) {
             Text(text = "해당 날짜의 이벤트가 없습니다.")
         } else {
@@ -192,7 +222,7 @@ fun MonthCalendarScreen(
                         }
                     }
                 }
-            )
+            }
         }
     }
 
@@ -203,6 +233,94 @@ fun MonthCalendarScreen(
             onConfirm = { year, month ->
                 shownMonth = YearMonth.of(year, month)
                 isJumpDialogOpen = false
+            }
+        )
+    }
+
+    if (isAddDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isAddDialogOpen = false },
+            confirmButton = {
+                Button(onClick = {
+                    val summary = newSummary.trim()
+                    if (summary.isBlank()) {
+                        addEventError = "제목을 입력하세요."
+                        return@Button
+                    }
+                    val parsedTime = runCatching { LocalTime.parse(newTime.trim(), inputTimeFormatter) }
+                        .getOrNull()
+                    if (parsedTime == null) {
+                        addEventError = "시간 형식은 HH:mm 입니다."
+                        return@Button
+                    }
+                    val labels = newLabels
+                        .split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                    val placeText = newPlaceText.trim().ifBlank { null }
+                    calendarViewModel.addEvent(
+                        date = calendarViewModel.selectedDate,
+                        time = parsedTime,
+                        categoryId = newCategoryId.trim().ifBlank { "life" },
+                        summary = summary,
+                        body = newBody.trim(),
+                        placeText = placeText,
+                        labels = labels
+                    )
+                    isAddDialogOpen = false
+                }) {
+                    Text(text = "저장")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isAddDialogOpen = false }) {
+                    Text(text = "취소")
+                }
+            },
+            title = {
+                Text(text = "이벤트 추가")
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newSummary,
+                        onValueChange = { newSummary = it },
+                        label = { Text(text = "제목") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newTime,
+                        onValueChange = { newTime = it },
+                        label = { Text(text = "시간 (HH:mm)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newCategoryId,
+                        onValueChange = { newCategoryId = it },
+                        label = { Text(text = "카테고리 ID") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newPlaceText,
+                        onValueChange = { newPlaceText = it },
+                        label = { Text(text = "장소") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newLabels,
+                        onValueChange = { newLabels = it },
+                        label = { Text(text = "라벨 (쉼표로 구분)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newBody,
+                        onValueChange = { newBody = it },
+                        label = { Text(text = "내용") }
+                    )
+                    addEventError?.let { message ->
+                        Text(text = message, color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         )
     }
