@@ -1,6 +1,15 @@
 package com.echo.echocalendar.ui.demo
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -13,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -127,6 +137,14 @@ fun MonthCalendarScreen(
         val desiredOffsetPx = maxWidthPx * anchorFraction - popupWidthPx / 2
         val clampedOffsetPx = desiredOffsetPx.coerceIn(0f, maxWidthPx - popupWidthPx)
         val popupYOffsetPx = with(density) { -bottomBarHeight.toPx() }
+        val animatedOffset by animateIntOffsetAsState(
+            targetValue = androidx.compose.ui.unit.IntOffset(
+                x = clampedOffsetPx.roundToInt(),
+                y = popupYOffsetPx.roundToInt()
+            ),
+            animationSpec = tween(durationMillis = 180),
+            label = "ActionPickerOffset"
+        )
 
         Column(
             modifier = Modifier
@@ -266,12 +284,15 @@ fun MonthCalendarScreen(
             visible = isActionPickerOpen,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .offset {
-                    androidx.compose.ui.unit.IntOffset(
-                        x = clampedOffsetPx.roundToInt(),
-                        y = popupYOffsetPx.roundToInt()
-                    )
-                }
+                .offset { animatedOffset },
+            enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
+                animationSpec = tween(160),
+                initialOffsetY = { it / 2 }
+            ),
+            exit = fadeOut(animationSpec = tween(140)) + slideOutVertically(
+                animationSpec = tween(140),
+                targetOffsetY = { it / 2 }
+            )
         ) {
             Surface(
                 modifier = Modifier.width(popupWidth),
@@ -279,65 +300,102 @@ fun MonthCalendarScreen(
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
             ) {
-                Row(
+                AnimatedContent(
+                    targetState = activeTrigger,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(160)) + slideInVertically(
+                            animationSpec = tween(160),
+                            initialOffsetY = { it / 4 }
+                        )).togetherWith(
+                            fadeOut(animationSpec = tween(120)) + slideOutVertically(
+                                animationSpec = tween(120),
+                                targetOffsetY = { it / 4 }
+                            )
+                        ).using(SizeTransform(clip = false))
+                    },
+                    label = "ActionPickerContent"
+                ) { trigger ->
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (trigger == InputTrigger.Keyboard) {
+                            ActionChoiceTile(
+                                label = "입력",
+                                icon = Icons.Default.Edit,
+                                onClick = {
+                                    isActionPickerOpen = false
+                                    wipMessage = "WIP(입력) - GPT-5.2-Codex"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Divider(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .width(1.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                            )
+                            ActionChoiceTile(
+                                label = "검색",
+                                icon = Icons.Default.Search,
+                                onClick = {
+                                    isActionPickerOpen = false
+                                    wipMessage = "WIP(검색) - GPT-5.2-Codex"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            ActionChoiceTile(
+                                label = "AI 입력",
+                                icon = Icons.Default.Mic,
+                                onClick = {
+                                    isActionPickerOpen = false
+                                    wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Divider(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .width(1.dp),
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                            )
+                            ActionChoiceTile(
+                                label = "AI 검색",
+                                icon = Icons.Default.Search,
+                                onClick = {
+                                    isActionPickerOpen = false
+                                    wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
                     modifier = Modifier
-                        .padding(12.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (activeTrigger == InputTrigger.Keyboard) {
-                        ActionChoiceTile(
-                            label = "입력",
-                            icon = Icons.Default.Edit,
-                            onClick = {
-                                isActionPickerOpen = false
-                                wipMessage = "WIP(입력) - GPT-5.2-Codex"
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Divider(
-                            modifier = Modifier
-                                .height(48.dp)
-                                .width(1.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                        )
-                        ActionChoiceTile(
-                            label = "검색",
-                            icon = Icons.Default.Search,
-                            onClick = {
-                                isActionPickerOpen = false
-                                wipMessage = "WIP(검색) - GPT-5.2-Codex"
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    } else {
-                        ActionChoiceTile(
-                            label = "AI 입력",
-                            icon = Icons.Default.Mic,
-                            onClick = {
-                                isActionPickerOpen = false
-                                wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Divider(
-                            modifier = Modifier
-                                .height(48.dp)
-                                .width(1.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                        )
-                        ActionChoiceTile(
-                            label = "AI 검색",
-                            icon = Icons.Default.Search,
-                            onClick = {
-                                isActionPickerOpen = false
-                                wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+                        .height(bottomBarHeight * 0.6f)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                BottomBarButton(
+                    icon = Icons.Default.Mic,
+                    label = "마이크",
+                    enabled = isOnline,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Microphone) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Microphone
+                            isActionPickerOpen = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
@@ -576,7 +634,7 @@ private fun ActionChoiceTile(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         shape = MaterialTheme.shapes.medium,
         tonalElevation = 0.dp,
         border = BorderStroke(
@@ -588,13 +646,13 @@ private fun ActionChoiceTile(
             modifier = Modifier.padding(vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .size(20.dp)
+            )
             Text(text = label, style = MaterialTheme.typography.labelMedium)
         }
     }
@@ -614,16 +672,17 @@ private fun BottomBarButton(
         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     }
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(enabled = enabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = tint
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.padding(top = 12.dp)
+        )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
