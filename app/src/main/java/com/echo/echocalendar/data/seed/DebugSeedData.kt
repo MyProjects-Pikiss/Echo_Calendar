@@ -10,7 +10,7 @@ import java.time.ZoneId
 
 object DebugSeedData {
     suspend fun seedIfEmpty(database: AppDatabase, saveEventUseCase: SaveEventUseCase) {
-        if (database.eventDao().getAll().isNotEmpty()) return
+        val existingEvents = database.eventDao().getAll()
 
         database.withTransaction {
             if (database.categoryDao().getAll().isEmpty()) {
@@ -79,16 +79,56 @@ object DebugSeedData {
             )
         )
 
-        samples.forEach { sample ->
-            val occurredAt = sample.date.atTime(sample.time).atZone(zoneId).toInstant().toEpochMilli()
-            saveEventUseCase(
-                categoryId = sample.categoryId,
-                occurredAt = occurredAt,
-                summary = sample.summary,
-                body = sample.body,
-                placeText = sample.placeText,
-                labels = sample.labels
-            )
+        if (existingEvents.isEmpty()) {
+            samples.forEach { sample ->
+                val occurredAt = sample.date.atTime(sample.time).atZone(zoneId).toInstant().toEpochMilli()
+                saveEventUseCase(
+                    categoryId = sample.categoryId,
+                    occurredAt = occurredAt,
+                    summary = sample.summary,
+                    body = sample.body,
+                    placeText = sample.placeText,
+                    labels = sample.labels
+                )
+            }
+        }
+
+        val hasDemoEvents = existingEvents.any { it.summary.startsWith("데모 이벤트") }
+        if (!hasDemoEvents) {
+            val demoCategoryIds = listOf("work", "life", "learning", "finance", "medical")
+            val demoEvents = buildList {
+                repeat(20) { dayOffset ->
+                    val date = today.plusDays(dayOffset.toLong())
+                    val eventCount = (dayOffset % 3) + 1
+                    repeat(eventCount) { eventIndex ->
+                        val categoryId = demoCategoryIds[(dayOffset + eventIndex) % demoCategoryIds.size]
+                        val time = LocalTime.of(9 + eventIndex * 3, 0)
+                        add(
+                            SampleEvent(
+                                categoryId = categoryId,
+                                date = date,
+                                time = time,
+                                summary = "데모 이벤트 ${dayOffset + 1}-${eventIndex + 1}",
+                                body = "일자 ${date}에 등록된 ${eventIndex + 1}번째 이벤트",
+                                placeText = "데모 장소",
+                                labels = listOf("데모", "테스트")
+                            )
+                        )
+                    }
+                }
+            }
+
+            demoEvents.forEach { sample ->
+                val occurredAt = sample.date.atTime(sample.time).atZone(zoneId).toInstant().toEpochMilli()
+                saveEventUseCase(
+                    categoryId = sample.categoryId,
+                    occurredAt = occurredAt,
+                    summary = sample.summary,
+                    body = sample.body,
+                    placeText = sample.placeText,
+                    labels = sample.labels
+                )
+            }
         }
     }
 
