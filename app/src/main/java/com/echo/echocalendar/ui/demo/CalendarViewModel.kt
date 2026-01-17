@@ -6,17 +6,22 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.echo.echocalendar.data.local.EventEntity
+import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
+import com.echo.echocalendar.domain.usecase.SaveEventUseCase
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.YearMonth
 import kotlinx.coroutines.launch
 
 class CalendarViewModel(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
-    private val getEventsByMonthUseCase: GetEventsByMonthUseCase
+    private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
+    private val saveEventUseCase: SaveEventUseCase,
+    private val deleteEventUseCase: DeleteEventUseCase
 ) : ViewModel() {
     private val zoneId = ZoneId.of("Asia/Seoul")
 
@@ -44,6 +49,39 @@ class CalendarViewModel(
             return
         }
         loadEventsForMonth(month)
+    }
+
+    fun addEvent(
+        date: LocalDate,
+        time: LocalTime,
+        categoryId: String,
+        summary: String,
+        body: String,
+        placeText: String?,
+        labels: List<String>
+    ) {
+        viewModelScope.launch {
+            val occurredAt = date.atTime(time).atZone(zoneId).toInstant().toEpochMilli()
+            saveEventUseCase(
+                categoryId = categoryId,
+                occurredAt = occurredAt,
+                summary = summary,
+                body = body,
+                placeText = placeText,
+                labels = labels
+            )
+            loadEvents(date)
+            loadEventsForMonth(YearMonth.from(date))
+        }
+    }
+
+    fun deleteEvent(event: EventEntity) {
+        viewModelScope.launch {
+            deleteEventUseCase(event.id)
+            val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
+            loadEvents(date)
+            loadEventsForMonth(YearMonth.from(date))
+        }
     }
 
     private fun loadEvents(date: LocalDate) {

@@ -19,7 +19,7 @@ class EchoCalendarApplication : Application() {
         container = AppContainer(this)
         if (BuildConfig.DEBUG) {
             applicationScope.launch {
-                DebugSeedData.seedIfEmpty(container.database, container.saveEventUseCase)
+                DebugSeedData.seedIfEmpty(container.database)
             }
         }
     }
