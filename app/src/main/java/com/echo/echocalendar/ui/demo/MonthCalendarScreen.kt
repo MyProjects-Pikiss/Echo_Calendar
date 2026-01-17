@@ -1,11 +1,9 @@
 package com.echo.echocalendar.ui.demo
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -300,19 +298,9 @@ fun MonthCalendarScreen(
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
             ) {
-                AnimatedContent(
+                Crossfade(
                     targetState = activeTrigger,
-                    transitionSpec = {
-                        (fadeIn(animationSpec = tween(160)) + slideInVertically(
-                            animationSpec = tween(160),
-                            initialOffsetY = { it / 4 }
-                        )).togetherWith(
-                            fadeOut(animationSpec = tween(120)) + slideOutVertically(
-                                animationSpec = tween(120),
-                                targetOffsetY = { it / 4 }
-                            )
-                        ).using(SizeTransform(clip = false))
-                    },
+                    animationSpec = tween(160),
                     label = "ActionPickerContent"
                 ) { trigger ->
                     Row(
@@ -372,6 +360,55 @@ fun MonthCalendarScreen(
                                 },
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
+                    modifier = Modifier
+                        .height(bottomBarHeight * 0.6f)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                BottomBarButton(
+                    icon = Icons.Default.Mic,
+                    label = "마이크",
+                    enabled = isOnline,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Microphone) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Microphone
+                            isActionPickerOpen = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            tonalElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(bottomBarHeight),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BottomBarButton(
+                    icon = Icons.Default.Keyboard,
+                    label = "키보드",
+                    enabled = true,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Keyboard) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Keyboard
+                            isActionPickerOpen = true
                         }
                     },
                     modifier = Modifier.weight(1f)
