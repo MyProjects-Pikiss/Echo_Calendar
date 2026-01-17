@@ -79,7 +79,31 @@ object DebugSeedData {
             )
         )
 
-        samples.forEach { sample ->
+        val demoCategoryIds = listOf("work", "life", "learning", "finance", "medical")
+        val demoEvents = buildList {
+            addAll(samples)
+            repeat(20) { dayOffset ->
+                val date = today.plusDays(dayOffset.toLong())
+                val eventCount = (dayOffset % 3) + 1
+                repeat(eventCount) { eventIndex ->
+                    val categoryId = demoCategoryIds[(dayOffset + eventIndex) % demoCategoryIds.size]
+                    val time = LocalTime.of(9 + eventIndex * 3, 0)
+                    add(
+                        SampleEvent(
+                            categoryId = categoryId,
+                            date = date,
+                            time = time,
+                            summary = "데모 이벤트 ${dayOffset + 1}-${eventIndex + 1}",
+                            body = "일자 ${date}에 등록된 ${eventIndex + 1}번째 이벤트",
+                            placeText = "데모 장소",
+                            labels = listOf("데모", "테스트")
+                        )
+                    )
+                }
+            }
+        }
+
+        demoEvents.forEach { sample ->
             val occurredAt = sample.date.atTime(sample.time).atZone(zoneId).toInstant().toEpochMilli()
             saveEventUseCase(
                 categoryId = sample.categoryId,
