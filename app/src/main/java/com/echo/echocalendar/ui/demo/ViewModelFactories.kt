@@ -2,6 +2,7 @@ package com.echo.echocalendar.ui.demo
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
@@ -22,7 +23,8 @@ class SearchViewModelFactory(
 class CalendarViewModelFactory(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
-    private val saveEventUseCase: SaveEventUseCase
+    private val saveEventUseCase: SaveEventUseCase,
+    private val deleteEventUseCase: DeleteEventUseCase
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CalendarViewModel::class.java)) {
@@ -30,7 +32,8 @@ class CalendarViewModelFactory(
             return CalendarViewModel(
                 getEventsByDateUseCase,
                 getEventsByMonthUseCase,
-                saveEventUseCase
+                saveEventUseCase,
+                deleteEventUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

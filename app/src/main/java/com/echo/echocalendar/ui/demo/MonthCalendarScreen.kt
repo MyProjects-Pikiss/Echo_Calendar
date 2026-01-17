@@ -352,6 +352,14 @@ fun MonthCalendarScreen(
         AlertDialog(
             onDismissRequest = { selectedEvent = null },
             confirmButton = {
+                TextButton(onClick = {
+                    calendarViewModel.deleteEvent(event)
+                    selectedEvent = null
+                }) {
+                    Text(text = "삭제")
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { selectedEvent = null }) {
                     Text(text = "닫기")
                 }

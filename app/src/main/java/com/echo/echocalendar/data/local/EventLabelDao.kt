@@ -16,4 +16,7 @@ interface EventLabelDao {
             "WHERE EventLabel.eventId = :eventId ORDER BY Label.name ASC"
     )
     suspend fun getLabelsForEvent(eventId: String): List<LabelEntity>
+
+    @Query("DELETE FROM EventLabel WHERE eventId = :eventId")
+    suspend fun deleteByEventId(eventId: String)
 }

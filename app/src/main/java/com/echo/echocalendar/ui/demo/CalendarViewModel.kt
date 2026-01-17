@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.echo.echocalendar.data.local.EventEntity
+import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
@@ -19,7 +20,8 @@ import kotlinx.coroutines.launch
 class CalendarViewModel(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
-    private val saveEventUseCase: SaveEventUseCase
+    private val saveEventUseCase: SaveEventUseCase,
+    private val deleteEventUseCase: DeleteEventUseCase
 ) : ViewModel() {
     private val zoneId = ZoneId.of("Asia/Seoul")
 
@@ -68,6 +70,15 @@ class CalendarViewModel(
                 placeText = placeText,
                 labels = labels
             )
+            loadEvents(date)
+            loadEventsForMonth(YearMonth.from(date))
+        }
+    }
+
+    fun deleteEvent(event: EventEntity) {
+        viewModelScope.launch {
+            deleteEventUseCase(event.id)
+            val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
         }

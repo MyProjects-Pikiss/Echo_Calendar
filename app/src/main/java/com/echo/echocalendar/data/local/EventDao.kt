@@ -49,4 +49,7 @@ interface EventDao {
             "ORDER BY occurredAt DESC, updatedAt DESC"
     )
     suspend fun getByOccurredAtRange(start: Long, end: Long): List<EventEntity>
+
+    @Query("DELETE FROM Event WHERE id = :eventId")
+    suspend fun deleteById(eventId: String)
 }

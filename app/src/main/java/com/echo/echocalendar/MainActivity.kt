@@ -37,7 +37,8 @@ class MainActivity : ComponentActivity() {
                     factory = CalendarViewModelFactory(
                         container.getEventsByDateUseCase,
                         container.getEventsByMonthUseCase,
-                        container.saveEventUseCase
+                        container.saveEventUseCase,
+                        container.deleteEventUseCase
                     )
                 )
                 var selectedTab by remember { mutableIntStateOf(0) }
