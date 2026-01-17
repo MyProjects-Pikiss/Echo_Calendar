@@ -33,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -259,19 +260,29 @@ fun MonthCalendarScreen(
                 shadowElevation = 4.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ActionChoiceButton(
+                    ActionChoiceTile(
                         label = "입력",
                         icon = Icons.Default.Edit,
-                        onClick = { isActionPickerOpen = false }
+                        onClick = { isActionPickerOpen = false },
+                        modifier = Modifier.weight(1f)
                     )
-                    ActionChoiceButton(
+                    Divider(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .width(1.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    )
+                    ActionChoiceTile(
                         label = "검색",
                         icon = Icons.Default.Search,
-                        onClick = { isActionPickerOpen = false }
+                        onClick = { isActionPickerOpen = false },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -286,38 +297,29 @@ fun MonthCalendarScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(bottomBarHeight)
-                    .padding(horizontal = 32.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .height(bottomBarHeight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = {
-                        isActionPickerOpen = !isActionPickerOpen
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Keyboard,
-                        contentDescription = "키보드"
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        isActionPickerOpen = !isActionPickerOpen
-                    },
-                    enabled = isOnline
-                ) {
-                    val tint = if (isOnline) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                    }
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "마이크",
-                        tint = tint
-                    )
-                }
+                BottomBarButton(
+                    icon = Icons.Default.Keyboard,
+                    label = "키보드",
+                    enabled = true,
+                    onClick = { isActionPickerOpen = !isActionPickerOpen },
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
+                    modifier = Modifier
+                        .height(bottomBarHeight * 0.6f)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                BottomBarButton(
+                    icon = Icons.Default.Mic,
+                    label = "마이크",
+                    enabled = isOnline,
+                    onClick = { isActionPickerOpen = !isActionPickerOpen },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -487,16 +489,62 @@ fun MonthCalendarScreen(
 }
 
 @Composable
-private fun ActionChoiceButton(
+private fun ActionChoiceTile(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-            Icon(imageVector = icon, contentDescription = label)
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 0.dp,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+                Icon(imageVector = icon, contentDescription = label)
+            }
+            Text(text = label, style = MaterialTheme.typography.labelMedium)
         }
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+private fun BottomBarButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tint = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    }
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        IconButton(onClick = onClick, enabled = enabled) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = tint
+        )
     }
 }
 
