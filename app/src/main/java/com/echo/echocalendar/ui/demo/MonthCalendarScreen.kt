@@ -45,6 +45,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -72,7 +73,8 @@ fun MonthCalendarScreen(
     var isAddDialogOpen by remember { mutableStateOf(false) }
     var newSummary by remember { mutableStateOf("") }
     var newTime by remember { mutableStateOf("09:00") }
-    var newCategoryId by remember { mutableStateOf("life") }
+    var selectedCategoryId by remember { mutableStateOf(CategoryDefaults.categories.first().id) }
+    var isCategoryMenuOpen by remember { mutableStateOf(false) }
     var newPlaceText by remember { mutableStateOf("") }
     var newBody by remember { mutableStateOf("") }
     var newLabels by remember { mutableStateOf("") }
@@ -174,7 +176,7 @@ fun MonthCalendarScreen(
             TextButton(onClick = {
                 newSummary = ""
                 newTime = "09:00"
-                newCategoryId = "life"
+                selectedCategoryId = CategoryDefaults.categories.first().id
                 newPlaceText = ""
                 newBody = ""
                 newLabels = ""
@@ -253,6 +255,11 @@ fun MonthCalendarScreen(
                         addEventError = "시간 형식은 HH:mm 입니다."
                         return@Button
                     }
+                    val body = newBody.trim()
+                    if (body.isBlank()) {
+                        addEventError = "내용을 입력하세요."
+                        return@Button
+                    }
                     val labels = newLabels
                         .split(",")
                         .map { it.trim() }
@@ -261,9 +268,9 @@ fun MonthCalendarScreen(
                     calendarViewModel.addEvent(
                         date = calendarViewModel.selectedDate,
                         time = parsedTime,
-                        categoryId = newCategoryId.trim().ifBlank { "life" },
+                        categoryId = selectedCategoryId,
                         summary = summary,
-                        body = newBody.trim(),
+                        body = body,
                         placeText = placeText,
                         labels = labels
                     )
@@ -294,12 +301,28 @@ fun MonthCalendarScreen(
                         label = { Text(text = "시간 (HH:mm)") },
                         singleLine = true
                     )
-                    OutlinedTextField(
-                        value = newCategoryId,
-                        onValueChange = { newCategoryId = it },
-                        label = { Text(text = "카테고리 ID") },
-                        singleLine = true
-                    )
+                    Box {
+                        TextButton(onClick = { isCategoryMenuOpen = true }) {
+                            val selectedCategory = CategoryDefaults.categories
+                                .firstOrNull { it.id == selectedCategoryId }
+                            val label = selectedCategory?.displayName ?: selectedCategoryId
+                            Text(text = "카테고리: $label")
+                        }
+                        DropdownMenu(
+                            expanded = isCategoryMenuOpen,
+                            onDismissRequest = { isCategoryMenuOpen = false }
+                        ) {
+                            CategoryDefaults.categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(text = category.displayName) },
+                                    onClick = {
+                                        selectedCategoryId = category.id
+                                        isCategoryMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = newPlaceText,
                         onValueChange = { newPlaceText = it },

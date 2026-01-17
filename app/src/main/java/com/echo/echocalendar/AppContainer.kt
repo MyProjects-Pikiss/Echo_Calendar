@@ -13,7 +13,7 @@ class AppContainer(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "echo_calendar.db"
-    ).build()
+    ).fallbackToDestructiveMigration().build()
 
     val saveEventUseCase: SaveEventUseCase = SaveEventUseCase(database)
     val searchEventsUseCase: SearchEventsUseCase = SearchEventsUseCase(database)

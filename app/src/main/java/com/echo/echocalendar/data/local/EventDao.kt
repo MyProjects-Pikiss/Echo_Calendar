@@ -38,7 +38,7 @@ interface EventDao {
 
     @Query(
         "SELECT Event.* FROM Event " +
-            "JOIN EventFts ON Event.rowid = EventFts.rowid " +
+            "JOIN EventFts ON Event.id = EventFts.eventId " +
             "WHERE EventFts MATCH :query " +
             "ORDER BY Event.occurredAt DESC, Event.updatedAt DESC"
     )
