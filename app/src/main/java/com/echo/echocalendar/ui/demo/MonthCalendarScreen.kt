@@ -361,8 +361,78 @@ fun MonthCalendarScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                    }
-                }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
+                    modifier = Modifier
+                        .height(bottomBarHeight * 0.6f)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                BottomBarButton(
+                    icon = Icons.Default.Mic,
+                    label = "마이크",
+                    enabled = isOnline,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Microphone) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Microphone
+                            isActionPickerOpen = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            tonalElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(bottomBarHeight),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BottomBarButton(
+                    icon = Icons.Default.Keyboard,
+                    label = "키보드",
+                    enabled = true,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Keyboard) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Keyboard
+                            isActionPickerOpen = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
+                    modifier = Modifier
+                        .height(bottomBarHeight * 0.6f)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                BottomBarButton(
+                    icon = Icons.Default.Mic,
+                    label = "마이크",
+                    enabled = isOnline,
+                    onClick = {
+                        if (activeTrigger == InputTrigger.Microphone) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Microphone
+                            isActionPickerOpen = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
