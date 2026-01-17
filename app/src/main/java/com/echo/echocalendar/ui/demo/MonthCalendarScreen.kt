@@ -1,5 +1,6 @@
 package com.echo.echocalendar.ui.demo
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -10,22 +11,33 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,16 +47,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.DayOfWeek
 import java.time.Instant
@@ -58,7 +68,8 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MonthCalendarScreen(
-    calendarViewModel: CalendarViewModel
+    calendarViewModel: CalendarViewModel,
+    isOnline: Boolean
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
     val today = remember { LocalDate.now(zoneId) }
@@ -79,7 +90,9 @@ fun MonthCalendarScreen(
     var newBody by remember { mutableStateOf("") }
     var newLabels by remember { mutableStateOf("") }
     var addEventError by remember { mutableStateOf<String?>(null) }
+    var isActionPickerOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
+    val bottomBarHeight = 72.dp
 
     LaunchedEffect(pagerState.currentPage) {
         val offset = pagerState.currentPage - 1200
@@ -99,130 +112,211 @@ fun MonthCalendarScreen(
         calendarViewModel.onMonthShown(shownMonth)
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .padding(bottom = bottomBarHeight)
         ) {
-            IconButton(onClick = { shownMonth = shownMonth.minusMonths(1) }) {
-                Text(text = "◀")
-            }
-            Text(
-                text = monthFormatter.format(shownMonth.atDay(1)),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.clickable { isJumpDialogOpen = true }
-            )
-            IconButton(onClick = { shownMonth = shownMonth.plusMonths(1) }) {
-                Text(text = "▶")
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf(
-                DayOfWeek.SUNDAY,
-                DayOfWeek.MONDAY,
-                DayOfWeek.TUESDAY,
-                DayOfWeek.WEDNESDAY,
-                DayOfWeek.THURSDAY,
-                DayOfWeek.FRIDAY,
-                DayOfWeek.SATURDAY
-            ).forEach { dayOfWeek ->
-                val label = when (dayOfWeek) {
-                    DayOfWeek.SUNDAY -> "일"
-                    DayOfWeek.MONDAY -> "월"
-                    DayOfWeek.TUESDAY -> "화"
-                    DayOfWeek.WEDNESDAY -> "수"
-                    DayOfWeek.THURSDAY -> "목"
-                    DayOfWeek.FRIDAY -> "금"
-                    DayOfWeek.SATURDAY -> "토"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { shownMonth = shownMonth.minusMonths(1) }) {
+                    Text(text = "◀")
                 }
                 Text(
-                    text = label,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    text = monthFormatter.format(shownMonth.atDay(1)),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.clickable { isJumpDialogOpen = true }
                 )
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) { page ->
-            val month = initialMonth.plusMonths((page - 1200).toLong())
-            MonthGrid(
-                month = month,
-                today = today,
-                selectedDate = calendarViewModel.selectedDate,
-                eventsByDate = calendarViewModel.eventsByDate,
-                onDateClick = {
-                    calendarViewModel.onDateSelected(it)
+                IconButton(onClick = { shownMonth = shownMonth.plusMonths(1) }) {
+                    Text(text = "▶")
                 }
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(onClick = {
-                newSummary = ""
-                newTime = "09:00"
-                selectedCategoryId = CategoryDefaults.categories.first().id
-                newPlaceText = ""
-                newBody = ""
-                newLabels = ""
-                addEventError = null
-                isAddDialogOpen = true
-            }) {
-                Text(text = "이벤트 추가")
             }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        if (calendarViewModel.eventsOfDay.isEmpty()) {
-            Text(text = "해당 날짜의 이벤트가 없습니다.")
-        } else {
-            LazyColumn(
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf(
+                    DayOfWeek.SUNDAY,
+                    DayOfWeek.MONDAY,
+                    DayOfWeek.TUESDAY,
+                    DayOfWeek.WEDNESDAY,
+                    DayOfWeek.THURSDAY,
+                    DayOfWeek.FRIDAY,
+                    DayOfWeek.SATURDAY
+                ).forEach { dayOfWeek ->
+                    val label = when (dayOfWeek) {
+                        DayOfWeek.SUNDAY -> "일"
+                        DayOfWeek.MONDAY -> "월"
+                        DayOfWeek.TUESDAY -> "화"
+                        DayOfWeek.WEDNESDAY -> "수"
+                        DayOfWeek.THURSDAY -> "목"
+                        DayOfWeek.FRIDAY -> "금"
+                        DayOfWeek.SATURDAY -> "토"
+                    }
+                    Text(
+                        text = label,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 220.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .weight(1f)
+            ) { page ->
+                val month = initialMonth.plusMonths((page - 1200).toLong())
+                MonthGrid(
+                    month = month,
+                    today = today,
+                    selectedDate = calendarViewModel.selectedDate,
+                    eventsByDate = calendarViewModel.eventsByDate,
+                    onDateClick = {
+                        calendarViewModel.onDateSelected(it)
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                items(calendarViewModel.eventsOfDay) { event ->
-                    val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
-                        .atZone(zoneId)
-                        .toLocalDateTime()
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedEvent = event }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                TextButton(onClick = {
+                    newSummary = ""
+                    newTime = "09:00"
+                    selectedCategoryId = CategoryDefaults.categories.first().id
+                    newPlaceText = ""
+                    newBody = ""
+                    newLabels = ""
+                    addEventError = null
+                    isAddDialogOpen = true
+                }) {
+                    Text(text = "이벤트 추가")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (calendarViewModel.eventsOfDay.isEmpty()) {
+                Text(text = "해당 날짜의 이벤트가 없습니다.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp, max = 220.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(calendarViewModel.eventsOfDay) { event ->
+                        val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                            .atZone(zoneId)
+                            .toLocalDateTime()
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedEvent = event }
                         ) {
-                            Text(
-                                text = event.summary,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = timeFormatter.format(eventDateTime),
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = event.summary,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = timeFormatter.format(eventDateTime),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         }
                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isActionPickerOpen,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .offset(y = -bottomBarHeight)
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ActionChoiceButton(
+                        label = "입력",
+                        icon = Icons.Default.Edit,
+                        onClick = { isActionPickerOpen = false }
+                    )
+                    ActionChoiceButton(
+                        label = "검색",
+                        icon = Icons.Default.Search,
+                        onClick = { isActionPickerOpen = false }
+                    )
+                }
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            tonalElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(bottomBarHeight)
+                    .padding(horizontal = 32.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        isActionPickerOpen = !isActionPickerOpen
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Keyboard,
+                        contentDescription = "키보드"
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        isActionPickerOpen = !isActionPickerOpen
+                    },
+                    enabled = isOnline
+                ) {
+                    val tint = if (isOnline) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "마이크",
+                        tint = tint
+                    )
                 }
             }
         }
@@ -389,6 +483,20 @@ fun MonthCalendarScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ActionChoiceButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+            Icon(imageVector = icon, contentDescription = label)
+        }
+        Text(text = label, style = MaterialTheme.typography.labelMedium)
     }
 }
 
