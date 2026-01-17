@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,7 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -95,6 +98,8 @@ fun MonthCalendarScreen(
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
+    val popupWidth = 240.dp
+    val density = LocalDensity.current
 
     LaunchedEffect(pagerState.currentPage) {
         val offset = pagerState.currentPage - 1200
@@ -114,7 +119,14 @@ fun MonthCalendarScreen(
         calendarViewModel.onMonthShown(shownMonth)
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val popupWidthPx = with(density) { popupWidth.toPx() }
+        val anchorFraction = if (activeTrigger == InputTrigger.Keyboard) 0.25f else 0.75f
+        val desiredOffsetPx = maxWidthPx * anchorFraction - popupWidthPx / 2
+        val clampedOffsetPx = desiredOffsetPx.coerceIn(0f, maxWidthPx - popupWidthPx)
+        val popupYOffsetPx = with(density) { -bottomBarHeight.toPx() }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -252,10 +264,16 @@ fun MonthCalendarScreen(
         AnimatedVisibility(
             visible = isActionPickerOpen,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = -bottomBarHeight)
+                .align(Alignment.BottomStart)
+                .offset {
+                    androidx.compose.ui.unit.IntOffset(
+                        x = clampedOffsetPx.roundToInt(),
+                        y = popupYOffsetPx.roundToInt()
+                    )
+                }
         ) {
             Surface(
+                modifier = Modifier.width(popupWidth),
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
@@ -533,11 +551,15 @@ private fun ActionChoiceTile(
         )
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 8.dp),
+            modifier = Modifier.padding(vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
-                Icon(imageVector = icon, contentDescription = label)
+            IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(20.dp)
+                )
             }
             Text(text = label, style = MaterialTheme.typography.labelMedium)
         }
