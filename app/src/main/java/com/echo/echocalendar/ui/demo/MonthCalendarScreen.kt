@@ -306,7 +306,7 @@ fun MonthCalendarScreen(
                         )
                     } else {
                         ActionChoiceTile(
-                            label = "AI 요약",
+                            label = "AI 입력",
                             icon = Icons.Default.Mic,
                             onClick = { isActionPickerOpen = false },
                             modifier = Modifier.weight(1f)
@@ -345,8 +345,12 @@ fun MonthCalendarScreen(
                     label = "키보드",
                     enabled = true,
                     onClick = {
-                        activeTrigger = InputTrigger.Keyboard
-                        isActionPickerOpen = !isActionPickerOpen
+                        if (activeTrigger == InputTrigger.Keyboard) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Keyboard
+                            isActionPickerOpen = true
+                        }
                     },
                     modifier = Modifier.weight(1f)
                 )
@@ -361,8 +365,12 @@ fun MonthCalendarScreen(
                     label = "마이크",
                     enabled = isOnline,
                     onClick = {
-                        activeTrigger = InputTrigger.Microphone
-                        isActionPickerOpen = !isActionPickerOpen
+                        if (activeTrigger == InputTrigger.Microphone) {
+                            isActionPickerOpen = !isActionPickerOpen
+                        } else {
+                            activeTrigger = InputTrigger.Microphone
+                            isActionPickerOpen = true
+                        }
                     },
                     modifier = Modifier.weight(1f)
                 )
