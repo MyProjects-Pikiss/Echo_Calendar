@@ -92,6 +92,7 @@ fun MonthCalendarScreen(
     var newLabels by remember { mutableStateOf("") }
     var addEventError by remember { mutableStateOf<String?>(null) }
     var isActionPickerOpen by remember { mutableStateOf(false) }
+    var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
 
@@ -266,24 +267,45 @@ fun MonthCalendarScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ActionChoiceTile(
-                        label = "입력",
-                        icon = Icons.Default.Edit,
-                        onClick = { isActionPickerOpen = false },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Divider(
-                        modifier = Modifier
-                            .height(48.dp)
-                            .width(1.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                    )
-                    ActionChoiceTile(
-                        label = "검색",
-                        icon = Icons.Default.Search,
-                        onClick = { isActionPickerOpen = false },
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (activeTrigger == InputTrigger.Keyboard) {
+                        ActionChoiceTile(
+                            label = "입력",
+                            icon = Icons.Default.Edit,
+                            onClick = { isActionPickerOpen = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Divider(
+                            modifier = Modifier
+                                .height(48.dp)
+                                .width(1.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        )
+                        ActionChoiceTile(
+                            label = "검색",
+                            icon = Icons.Default.Search,
+                            onClick = { isActionPickerOpen = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        ActionChoiceTile(
+                            label = "AI 요약",
+                            icon = Icons.Default.Mic,
+                            onClick = { isActionPickerOpen = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Divider(
+                            modifier = Modifier
+                                .height(48.dp)
+                                .width(1.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        )
+                        ActionChoiceTile(
+                            label = "AI 검색",
+                            icon = Icons.Default.Search,
+                            onClick = { isActionPickerOpen = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -304,7 +326,10 @@ fun MonthCalendarScreen(
                     icon = Icons.Default.Keyboard,
                     label = "키보드",
                     enabled = true,
-                    onClick = { isActionPickerOpen = !isActionPickerOpen },
+                    onClick = {
+                        activeTrigger = InputTrigger.Keyboard
+                        isActionPickerOpen = !isActionPickerOpen
+                    },
                     modifier = Modifier.weight(1f)
                 )
                 Divider(
@@ -317,7 +342,10 @@ fun MonthCalendarScreen(
                     icon = Icons.Default.Mic,
                     label = "마이크",
                     enabled = isOnline,
-                    onClick = { isActionPickerOpen = !isActionPickerOpen },
+                    onClick = {
+                        activeTrigger = InputTrigger.Microphone
+                        isActionPickerOpen = !isActionPickerOpen
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -546,6 +574,11 @@ private fun BottomBarButton(
             color = tint
         )
     }
+}
+
+private enum class InputTrigger {
+    Keyboard,
+    Microphone
 }
 
 private val fixedHolidays = mapOf(
