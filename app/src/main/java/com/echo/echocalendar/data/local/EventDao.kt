@@ -31,6 +31,12 @@ interface EventDao {
     suspend fun getAll(): List<EventEntity>
 
     @Query(
+        "DELETE FROM Event WHERE summary LIKE :summaryPrefix " +
+            "OR summary IN (:summaries)"
+    )
+    suspend fun deleteSeededEvents(summaryPrefix: String, summaries: List<String>)
+
+    @Query(
         "SELECT Event.* FROM Event " +
             "JOIN EventFts ON Event.rowid = EventFts.rowid " +
             "WHERE EventFts MATCH :query " +
