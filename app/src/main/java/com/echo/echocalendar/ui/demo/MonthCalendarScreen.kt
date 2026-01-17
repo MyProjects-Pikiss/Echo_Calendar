@@ -3,7 +3,6 @@ package com.echo.echocalendar.ui.demo
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -298,141 +297,56 @@ fun MonthCalendarScreen(
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
             ) {
-                Crossfade(
-                    targetState = activeTrigger,
-                    animationSpec = tween(160),
-                    label = "ActionPickerContent"
-                ) { trigger ->
-                    Row(
-                        modifier = Modifier
-                            .padding(12.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    AnimatedVisibility(
+                        visible = activeTrigger == InputTrigger.Keyboard,
+                        enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
+                            animationSpec = tween(160),
+                            initialOffsetY = { it / 4 }
+                        ),
+                        exit = fadeOut(animationSpec = tween(120)) + slideOutVertically(
+                            animationSpec = tween(120),
+                            targetOffsetY = { it / 4 }
+                        )
                     ) {
-                        if (trigger == InputTrigger.Keyboard) {
-                            ActionChoiceTile(
-                                label = "입력",
-                                icon = Icons.Default.Edit,
-                                onClick = {
-                                    isActionPickerOpen = false
-                                    wipMessage = "WIP(입력) - GPT-5.2-Codex"
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            Divider(
-                                modifier = Modifier
-                                    .height(48.dp)
-                                    .width(1.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                            )
-                            ActionChoiceTile(
-                                label = "검색",
-                                icon = Icons.Default.Search,
-                                onClick = {
-                                    isActionPickerOpen = false
-                                    wipMessage = "WIP(검색) - GPT-5.2-Codex"
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        } else {
-                            ActionChoiceTile(
-                                label = "AI 입력",
-                                icon = Icons.Default.Mic,
-                                onClick = {
-                                    isActionPickerOpen = false
-                                    wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            Divider(
-                                modifier = Modifier
-                                    .height(48.dp)
-                                    .width(1.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                            )
-                            ActionChoiceTile(
-                                label = "AI 검색",
-                                icon = Icons.Default.Search,
-                                onClick = {
-                                    isActionPickerOpen = false
-                                    wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                Divider(
-                    modifier = Modifier
-                        .height(bottomBarHeight * 0.6f)
-                        .width(1.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                )
-                BottomBarButton(
-                    icon = Icons.Default.Mic,
-                    label = "마이크",
-                    enabled = isOnline,
-                    onClick = {
-                        if (activeTrigger == InputTrigger.Microphone) {
-                            isActionPickerOpen = !isActionPickerOpen
-                        } else {
-                            activeTrigger = InputTrigger.Microphone
-                            isActionPickerOpen = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            tonalElevation = 4.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(bottomBarHeight),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BottomBarButton(
-                    icon = Icons.Default.Keyboard,
-                    label = "키보드",
-                    enabled = true,
-                    onClick = {
-                        if (activeTrigger == InputTrigger.Keyboard) {
-                            isActionPickerOpen = !isActionPickerOpen
-                        } else {
-                            activeTrigger = InputTrigger.Keyboard
-                            isActionPickerOpen = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                Divider(
-                    modifier = Modifier
-                        .height(bottomBarHeight * 0.6f)
-                        .width(1.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                )
-                BottomBarButton(
-                    icon = Icons.Default.Mic,
-                    label = "마이크",
-                    enabled = isOnline,
-                    onClick = {
-                        if (activeTrigger == InputTrigger.Microphone) {
-                            isActionPickerOpen = !isActionPickerOpen
-                        } else {
-                            activeTrigger = InputTrigger.Microphone
-                            isActionPickerOpen = true
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
+                        ActionPickerRow(
+                            firstLabel = "입력",
+                            firstIcon = Icons.Default.Edit,
+                            firstMessage = "WIP(입력) - GPT-5.2-Codex",
+                            secondLabel = "검색",
+                            secondIcon = Icons.Default.Search,
+                            secondMessage = "WIP(검색) - GPT-5.2-Codex",
+                            onActionSelected = { message ->
+                                isActionPickerOpen = false
+                                wipMessage = message
+                            }
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = activeTrigger == InputTrigger.Microphone,
+                        enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
+                            animationSpec = tween(160),
+                            initialOffsetY = { it / 4 }
+                        ),
+                        exit = fadeOut(animationSpec = tween(120)) + slideOutVertically(
+                            animationSpec = tween(120),
+                            targetOffsetY = { it / 4 }
+                        )
+                    ) {
+                        ActionPickerRow(
+                            firstLabel = "AI 입력",
+                            firstIcon = Icons.Default.Mic,
+                            firstMessage = "WIP(AI 입력) - GPT-5.2-Codex",
+                            secondLabel = "AI 검색",
+                            secondIcon = Icons.Default.Search,
+                            secondMessage = "WIP(AI 검색) - GPT-5.2-Codex",
+                            onActionSelected = { message ->
+                                isActionPickerOpen = false
+                                wipMessage = message
+                            }
+                        )
+                    }
+                }
             }
         }
 
@@ -692,6 +606,44 @@ private fun ActionChoiceTile(
             )
             Text(text = label, style = MaterialTheme.typography.labelMedium)
         }
+    }
+}
+
+@Composable
+private fun ActionPickerRow(
+    firstLabel: String,
+    firstIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    firstMessage: String,
+    secondLabel: String,
+    secondIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    secondMessage: String,
+    onActionSelected: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .padding(12.dp)
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActionChoiceTile(
+            label = firstLabel,
+            icon = firstIcon,
+            onClick = { onActionSelected(firstMessage) },
+            modifier = Modifier.weight(1f)
+        )
+        Divider(
+            modifier = Modifier
+                .height(48.dp)
+                .width(1.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        )
+        ActionChoiceTile(
+            label = secondLabel,
+            icon = secondIcon,
+            onClick = { onActionSelected(secondMessage) },
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
