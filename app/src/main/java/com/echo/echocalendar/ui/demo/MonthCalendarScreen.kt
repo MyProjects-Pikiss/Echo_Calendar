@@ -96,6 +96,7 @@ fun MonthCalendarScreen(
     var addEventError by remember { mutableStateOf<String?>(null) }
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
+    var wipMessage by remember { mutableStateOf<String?>(null) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
     val popupWidth = 240.dp
@@ -289,7 +290,10 @@ fun MonthCalendarScreen(
                         ActionChoiceTile(
                             label = "입력",
                             icon = Icons.Default.Edit,
-                            onClick = { isActionPickerOpen = false },
+                            onClick = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(입력) - GPT-5.2-Codex"
+                            },
                             modifier = Modifier.weight(1f)
                         )
                         Divider(
@@ -301,14 +305,20 @@ fun MonthCalendarScreen(
                         ActionChoiceTile(
                             label = "검색",
                             icon = Icons.Default.Search,
-                            onClick = { isActionPickerOpen = false },
+                            onClick = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(검색) - GPT-5.2-Codex"
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     } else {
                         ActionChoiceTile(
                             label = "AI 입력",
                             icon = Icons.Default.Mic,
-                            onClick = { isActionPickerOpen = false },
+                            onClick = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
+                            },
                             modifier = Modifier.weight(1f)
                         )
                         Divider(
@@ -320,7 +330,10 @@ fun MonthCalendarScreen(
                         ActionChoiceTile(
                             label = "AI 검색",
                             icon = Icons.Default.Search,
-                            onClick = { isActionPickerOpen = false },
+                            onClick = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -386,6 +399,19 @@ fun MonthCalendarScreen(
                 shownMonth = YearMonth.of(year, month)
                 isJumpDialogOpen = false
             }
+        )
+    }
+
+    wipMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { wipMessage = null },
+            confirmButton = {
+                TextButton(onClick = { wipMessage = null }) {
+                    Text(text = "확인")
+                }
+            },
+            title = { Text(text = "Working in progress") },
+            text = { Text(text = message) }
         )
     }
 
