@@ -10,6 +10,7 @@ import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
+import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -21,7 +22,8 @@ class CalendarViewModel(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
     private val saveEventUseCase: SaveEventUseCase,
-    private val deleteEventUseCase: DeleteEventUseCase
+    private val deleteEventUseCase: DeleteEventUseCase,
+    private val updateEventUseCase: UpdateEventUseCase
 ) : ViewModel() {
     private val zoneId = ZoneId.of("Asia/Seoul")
 
@@ -79,6 +81,32 @@ class CalendarViewModel(
         viewModelScope.launch {
             deleteEventUseCase(event.id)
             val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
+            loadEvents(date)
+            loadEventsForMonth(YearMonth.from(date))
+        }
+    }
+
+    fun updateEvent(
+        eventId: String,
+        date: LocalDate,
+        time: LocalTime,
+        categoryId: String,
+        summary: String,
+        body: String,
+        placeText: String?,
+        labels: List<String>
+    ) {
+        viewModelScope.launch {
+            val occurredAt = date.atTime(time).atZone(zoneId).toInstant().toEpochMilli()
+            updateEventUseCase(
+                eventId = eventId,
+                categoryId = categoryId,
+                occurredAt = occurredAt,
+                summary = summary,
+                body = body,
+                placeText = placeText,
+                labels = labels
+            )
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
         }

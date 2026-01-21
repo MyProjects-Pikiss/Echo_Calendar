@@ -7,6 +7,7 @@ import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
+import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
 
 class SearchViewModelFactory(
     private val searchEventsUseCase: SearchEventsUseCase
@@ -24,7 +25,8 @@ class CalendarViewModelFactory(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
     private val saveEventUseCase: SaveEventUseCase,
-    private val deleteEventUseCase: DeleteEventUseCase
+    private val deleteEventUseCase: DeleteEventUseCase,
+    private val updateEventUseCase: UpdateEventUseCase
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CalendarViewModel::class.java)) {
@@ -33,7 +35,8 @@ class CalendarViewModelFactory(
                 getEventsByDateUseCase,
                 getEventsByMonthUseCase,
                 saveEventUseCase,
-                deleteEventUseCase
+                deleteEventUseCase,
+                updateEventUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

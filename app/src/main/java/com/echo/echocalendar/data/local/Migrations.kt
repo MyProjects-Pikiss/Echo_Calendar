@@ -1,0 +1,18 @@
+package com.echo.echocalendar.data.local
+
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS EventFts")
+        db.execSQL(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS EventFts " +
+                "USING fts5(eventId, summary, body, placeText)"
+        )
+        db.execSQL(
+            "INSERT INTO EventFts(eventId, summary, body, placeText) " +
+                "SELECT id, summary, body, placeText FROM Event"
+        )
+    }
+}

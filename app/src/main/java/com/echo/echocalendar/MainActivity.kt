@@ -33,7 +33,8 @@ class MainActivity : ComponentActivity() {
                         container.getEventsByDateUseCase,
                         container.getEventsByMonthUseCase,
                         container.saveEventUseCase,
-                        container.deleteEventUseCase
+                        container.deleteEventUseCase,
+                        container.updateEventUseCase
                     )
                 )
                 val isOnlineState = rememberIsOnline()
