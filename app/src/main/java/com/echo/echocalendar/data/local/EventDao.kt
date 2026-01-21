@@ -30,6 +30,9 @@ interface EventDao {
     @Query("SELECT * FROM Event ORDER BY occurredAt DESC, updatedAt DESC")
     suspend fun getAll(): List<EventEntity>
 
+    @Query("SELECT * FROM Event WHERE id = :eventId")
+    suspend fun getById(eventId: String): EventEntity?
+
     @Query(
         "DELETE FROM Event WHERE summary LIKE :summaryPrefix " +
             "OR summary IN (:summaries)"

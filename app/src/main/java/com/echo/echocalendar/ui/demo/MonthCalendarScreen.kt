@@ -92,15 +92,11 @@ fun MonthCalendarScreen(
     var shownMonth by remember { mutableStateOf(initialMonth) }
     var isJumpDialogOpen by remember { mutableStateOf(false) }
     var selectedEvent by remember { mutableStateOf<com.echo.echocalendar.data.local.EventEntity?>(null) }
-    var isAddDialogOpen by remember { mutableStateOf(false) }
-    var newSummary by remember { mutableStateOf("") }
-    var newTime by remember { mutableStateOf("09:00") }
-    var selectedCategoryId by remember { mutableStateOf(CategoryDefaults.categories.first().id) }
+    var pendingEdit by remember { mutableStateOf<PendingEdit?>(null) }
+    var pendingDelete by remember { mutableStateOf<com.echo.echocalendar.data.local.EventEntity?>(null) }
     var isCategoryMenuOpen by remember { mutableStateOf(false) }
-    var newPlaceText by remember { mutableStateOf("") }
-    var newBody by remember { mutableStateOf("") }
-    var newLabels by remember { mutableStateOf("") }
-    var addEventError by remember { mutableStateOf<String?>(null) }
+    var editError by remember { mutableStateOf<String?>(null) }
+    var rejectedAction by remember { mutableStateOf<RejectedAction?>(null) }
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     var wipMessage by remember { mutableStateOf<String?>(null) }
@@ -125,6 +121,12 @@ fun MonthCalendarScreen(
             pagerState.scrollToPage(targetPage)
         }
         calendarViewModel.onMonthShown(shownMonth)
+    }
+
+    LaunchedEffect(selectedEvent?.id) {
+        selectedEvent?.let { event ->
+            calendarViewModel.loadLabelsForEvent(event.id)
+        }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -218,19 +220,45 @@ fun MonthCalendarScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
+            rejectedAction?.let { rejected ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "확인 취소됨: ${rejected.title}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(text = rejected.details)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 TextButton(onClick = {
-                    newSummary = ""
-                    newTime = "09:00"
-                    selectedCategoryId = CategoryDefaults.categories.first().id
-                    newPlaceText = ""
-                    newBody = ""
-                    newLabels = ""
-                    addEventError = null
-                    isAddDialogOpen = true
+                    editError = null
+                    isCategoryMenuOpen = false
+                    pendingEdit = PendingEdit(
+                        action = CrudAction.Create,
+                        eventId = null,
+                        date = calendarViewModel.selectedDate,
+                        draft = EventDraft(
+                            summary = "",
+                            timeText = "09:00",
+                            categoryId = CategoryDefaults.categories.first().id,
+                            placeText = "",
+                            body = "",
+                            labelsText = ""
+                        )
+                    )
                 }) {
                     Text(text = "이벤트 추가")
                 }
@@ -424,73 +452,129 @@ fun MonthCalendarScreen(
         )
     }
 
-    if (isAddDialogOpen) {
+    pendingEdit?.let { editState ->
         AlertDialog(
-            onDismissRequest = { isAddDialogOpen = false },
+            onDismissRequest = { pendingEdit = null },
             confirmButton = {
                 Button(onClick = {
-                    val summary = newSummary.trim()
+                    val summary = editState.draft.summary.trim()
                     if (summary.isBlank()) {
-                        addEventError = "제목을 입력하세요."
+                        editError = "제목을 입력하세요."
                         return@Button
                     }
-                    val parsedTime = runCatching { LocalTime.parse(newTime.trim(), inputTimeFormatter) }
-                        .getOrNull()
+                    val parsedTime = runCatching {
+                        LocalTime.parse(editState.draft.timeText.trim(), inputTimeFormatter)
+                    }.getOrNull()
                     if (parsedTime == null) {
-                        addEventError = "시간 형식은 HH:mm 입니다."
+                        editError = "시간 형식은 HH:mm 입니다."
                         return@Button
                     }
-                    val body = newBody.trim()
+                    val body = editState.draft.body.trim()
                     if (body.isBlank()) {
-                        addEventError = "내용을 입력하세요."
+                        editError = "내용을 입력하세요."
                         return@Button
                     }
-                    val labels = newLabels
+                    val labels = editState.draft.labelsText
                         .split(",")
                         .map { it.trim() }
                         .filter { it.isNotBlank() }
-                    val placeText = newPlaceText.trim().ifBlank { null }
-                    calendarViewModel.addEvent(
-                        date = calendarViewModel.selectedDate,
-                        time = parsedTime,
-                        categoryId = selectedCategoryId,
-                        summary = summary,
-                        body = body,
-                        placeText = placeText,
-                        labels = labels
-                    )
-                    isAddDialogOpen = false
+                    val placeText = editState.draft.placeText.trim().ifBlank { null }
+                    when (editState.action) {
+                        CrudAction.Create -> {
+                            calendarViewModel.addEvent(
+                                date = editState.date,
+                                time = parsedTime,
+                                categoryId = editState.draft.categoryId,
+                                summary = summary,
+                                body = body,
+                                placeText = placeText,
+                                labels = labels
+                            )
+                        }
+                        CrudAction.Update -> {
+                            val eventId = editState.eventId ?: return@Button
+                            calendarViewModel.updateEvent(
+                                eventId = eventId,
+                                date = editState.date,
+                                time = parsedTime,
+                                categoryId = editState.draft.categoryId,
+                                summary = summary,
+                                body = body,
+                                placeText = placeText,
+                                labels = labels
+                            )
+                        }
+                        CrudAction.Delete -> return@Button
+                    }
+                    pendingEdit = null
+                    editError = null
                 }) {
-                    Text(text = "저장")
+                    Text(text = "확인")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isAddDialogOpen = false }) {
+                TextButton(onClick = {
+                    rejectedAction = RejectedAction(
+                        title = when (editState.action) {
+                            CrudAction.Create -> "이벤트 생성"
+                            CrudAction.Update -> "이벤트 수정"
+                            CrudAction.Delete -> "이벤트 삭제"
+                        },
+                        details = buildActionDetails(
+                            date = editState.date,
+                            timeText = editState.draft.timeText,
+                            categoryId = editState.draft.categoryId,
+                            summary = editState.draft.summary,
+                            placeText = editState.draft.placeText,
+                            labelsText = editState.draft.labelsText,
+                            body = editState.draft.body
+                        )
+                    )
+                    pendingEdit = null
+                    editError = null
+                }) {
                     Text(text = "취소")
                 }
             },
             title = {
-                Text(text = "이벤트 추가")
+                Text(
+                    text = when (editState.action) {
+                        CrudAction.Create -> "이벤트 생성 확인"
+                        CrudAction.Update -> "이벤트 수정 확인"
+                        CrudAction.Delete -> "이벤트 삭제 확인"
+                    }
+                )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "날짜: ${editState.date.format(dateFormatter)}")
                     OutlinedTextField(
-                        value = newSummary,
-                        onValueChange = { newSummary = it },
+                        value = editState.draft.summary,
+                        onValueChange = {
+                            pendingEdit = editState.copy(
+                                draft = editState.draft.copy(summary = it)
+                            )
+                            editError = null
+                        },
                         label = { Text(text = "제목") },
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = newTime,
-                        onValueChange = { newTime = it },
+                        value = editState.draft.timeText,
+                        onValueChange = {
+                            pendingEdit = editState.copy(
+                                draft = editState.draft.copy(timeText = it)
+                            )
+                            editError = null
+                        },
                         label = { Text(text = "시간 (HH:mm)") },
                         singleLine = true
                     )
                     Box {
                         TextButton(onClick = { isCategoryMenuOpen = true }) {
                             val selectedCategory = CategoryDefaults.categories
-                                .firstOrNull { it.id == selectedCategoryId }
-                            val label = selectedCategory?.displayName ?: selectedCategoryId
+                                .firstOrNull { it.id == editState.draft.categoryId }
+                            val label = selectedCategory?.displayName ?: editState.draft.categoryId
                             Text(text = "카테고리: $label")
                         }
                         DropdownMenu(
@@ -501,33 +585,108 @@ fun MonthCalendarScreen(
                                 DropdownMenuItem(
                                     text = { Text(text = category.displayName) },
                                     onClick = {
-                                        selectedCategoryId = category.id
+                                        pendingEdit = editState.copy(
+                                            draft = editState.draft.copy(categoryId = category.id)
+                                        )
                                         isCategoryMenuOpen = false
+                                        editError = null
                                     }
                                 )
                             }
                         }
                     }
                     OutlinedTextField(
-                        value = newPlaceText,
-                        onValueChange = { newPlaceText = it },
+                        value = editState.draft.placeText,
+                        onValueChange = {
+                            pendingEdit = editState.copy(
+                                draft = editState.draft.copy(placeText = it)
+                            )
+                            editError = null
+                        },
                         label = { Text(text = "장소") },
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = newLabels,
-                        onValueChange = { newLabels = it },
+                        value = editState.draft.labelsText,
+                        onValueChange = {
+                            pendingEdit = editState.copy(
+                                draft = editState.draft.copy(labelsText = it)
+                            )
+                            editError = null
+                        },
                         label = { Text(text = "라벨 (쉼표로 구분)") },
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = newBody,
-                        onValueChange = { newBody = it },
+                        value = editState.draft.body,
+                        onValueChange = {
+                            pendingEdit = editState.copy(
+                                draft = editState.draft.copy(body = it)
+                            )
+                            editError = null
+                        },
                         label = { Text(text = "내용") }
                     )
-                    addEventError?.let { message ->
+                    editError?.let { message ->
                         Text(text = message, color = MaterialTheme.colorScheme.error)
                     }
+                }
+            }
+        )
+    }
+
+    pendingDelete?.let { event ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            confirmButton = {
+                Button(onClick = {
+                    calendarViewModel.deleteEvent(event)
+                    pendingDelete = null
+                }) {
+                    Text(text = "삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val occurredAt = Instant.ofEpochMilli(event.occurredAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    rejectedAction = RejectedAction(
+                        title = "이벤트 삭제",
+                        details = buildActionDetails(
+                            date = occurredAt.toLocalDate(),
+                            timeText = timeFormatter.format(occurredAt),
+                            categoryId = event.categoryId,
+                            summary = event.summary,
+                            placeText = event.placeText.orEmpty(),
+                            labelsText = calendarViewModel.labelsByEventId[event.id]?.joinToString(", ")
+                                .orEmpty(),
+                            body = event.body
+                        )
+                    )
+                    pendingDelete = null
+                }) {
+                    Text(text = "취소")
+                }
+            },
+            title = { Text(text = "이벤트 삭제 확인") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val occurredAt = Instant.ofEpochMilli(event.occurredAt)
+                        .atZone(zoneId)
+                        .toLocalDateTime()
+                    val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
+                    Text(text = "날짜: ${occurredAt.format(dateFormatter)}")
+                    Text(text = "시간: ${occurredAt.format(timeFormatter)}")
+                    Text(text = "제목: ${event.summary}")
+                    val categoryName = CategoryDefaults.categories
+                        .firstOrNull { it.id == event.categoryId }
+                        ?.displayName
+                        ?: event.categoryId
+                    Text(text = "카테고리: $categoryName")
+                    Text(text = "장소: ${event.placeText ?: "없음"}")
+                    Text(text = "라벨: ${labels.joinToString(", ").ifBlank { "없음" }}")
+                    Text(text = "내용: ${event.body.ifBlank { "없음" }}")
                 }
             }
         )
@@ -537,11 +696,37 @@ fun MonthCalendarScreen(
         AlertDialog(
             onDismissRequest = { selectedEvent = null },
             confirmButton = {
-                TextButton(onClick = {
-                    calendarViewModel.deleteEvent(event)
-                    selectedEvent = null
-                }) {
-                    Text(text = "삭제")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                            .atZone(zoneId)
+                            .toLocalDateTime()
+                        val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
+                        pendingEdit = PendingEdit(
+                            action = CrudAction.Update,
+                            eventId = event.id,
+                            date = eventDateTime.toLocalDate(),
+                            draft = EventDraft(
+                                summary = event.summary,
+                                timeText = timeFormatter.format(eventDateTime),
+                                categoryId = event.categoryId,
+                                placeText = event.placeText.orEmpty(),
+                                body = event.body,
+                                labelsText = labels.joinToString(", ")
+                            )
+                        )
+                        isCategoryMenuOpen = false
+                        editError = null
+                        selectedEvent = null
+                    }) {
+                        Text(text = "수정")
+                    }
+                    TextButton(onClick = {
+                        pendingDelete = event
+                        selectedEvent = null
+                    }) {
+                        Text(text = "삭제")
+                    }
                 }
             },
             dismissButton = {
@@ -557,17 +742,23 @@ fun MonthCalendarScreen(
                     val occurredAt = Instant.ofEpochMilli(event.occurredAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
+                    val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
                     val createdAt = Instant.ofEpochMilli(event.createdAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
                     val updatedAt = Instant.ofEpochMilli(event.updatedAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
+                    val categoryName = CategoryDefaults.categories
+                        .firstOrNull { it.id == event.categoryId }
+                        ?.displayName
+                        ?: event.categoryId
                     Text(text = "ID: ${event.id}")
-                    Text(text = "카테고리: ${event.categoryId}")
+                    Text(text = "카테고리: $categoryName")
                     Text(text = "일시: ${occurredAt.format(dateFormatter)} ${occurredAt.format(timeFormatter)}")
                     Text(text = "제목: ${event.summary}")
                     Text(text = "장소: ${event.placeText ?: "없음"}")
+                    Text(text = "라벨: ${labels.joinToString(", ").ifBlank { "없음" }}")
                     Text(text = "내용: ${event.body.ifBlank { "없음" }}")
                     Text(text = "생성: ${createdAt.format(dateFormatter)} ${createdAt.format(timeFormatter)}")
                     Text(text = "수정: ${updatedAt.format(dateFormatter)} ${updatedAt.format(timeFormatter)}")
@@ -683,6 +874,56 @@ private fun BottomBarButton(
 private enum class InputTrigger {
     Keyboard,
     Microphone
+}
+
+private enum class CrudAction {
+    Create,
+    Update,
+    Delete
+}
+
+private data class EventDraft(
+    val summary: String,
+    val timeText: String,
+    val categoryId: String,
+    val placeText: String,
+    val body: String,
+    val labelsText: String
+)
+
+private data class PendingEdit(
+    val action: CrudAction,
+    val eventId: String?,
+    val date: LocalDate,
+    val draft: EventDraft
+)
+
+private data class RejectedAction(
+    val title: String,
+    val details: String
+)
+
+private fun buildActionDetails(
+    date: LocalDate,
+    timeText: String,
+    categoryId: String,
+    summary: String,
+    placeText: String,
+    labelsText: String,
+    body: String
+): String {
+    val safePlace = placeText.ifBlank { "없음" }
+    val safeLabels = labelsText.ifBlank { "없음" }
+    val safeBody = body.ifBlank { "없음" }
+    return buildString {
+        append("날짜: ").append(date).append('\n')
+        append("시간: ").append(timeText).append('\n')
+        append("카테고리: ").append(categoryId).append('\n')
+        append("제목: ").append(summary).append('\n')
+        append("장소: ").append(safePlace).append('\n')
+        append("라벨: ").append(safeLabels).append('\n')
+        append("내용: ").append(safeBody)
+    }
 }
 
 private val fixedHolidays = mapOf(

@@ -9,7 +9,9 @@ import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
+import com.echo.echocalendar.domain.usecase.GetLabelsForEventUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
+import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -20,8 +22,10 @@ import kotlinx.coroutines.launch
 class CalendarViewModel(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
+    private val getLabelsForEventUseCase: GetLabelsForEventUseCase,
     private val saveEventUseCase: SaveEventUseCase,
-    private val deleteEventUseCase: DeleteEventUseCase
+    private val deleteEventUseCase: DeleteEventUseCase,
+    private val updateEventUseCase: UpdateEventUseCase
 ) : ViewModel() {
     private val zoneId = ZoneId.of("Asia/Seoul")
 
@@ -30,6 +34,8 @@ class CalendarViewModel(
     var eventsOfDay by mutableStateOf<List<EventEntity>>(emptyList())
         private set
     var eventsByDate by mutableStateOf<Map<LocalDate, List<EventEntity>>>(emptyMap())
+        private set
+    var labelsByEventId by mutableStateOf<Map<String, List<String>>>(emptyMap())
         private set
 
     private var loadedMonth: YearMonth? = null
@@ -78,7 +84,42 @@ class CalendarViewModel(
     fun deleteEvent(event: EventEntity) {
         viewModelScope.launch {
             deleteEventUseCase(event.id)
+            labelsByEventId = labelsByEventId - event.id
             val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
+            loadEvents(date)
+            loadEventsForMonth(YearMonth.from(date))
+        }
+    }
+
+    fun loadLabelsForEvent(eventId: String) {
+        viewModelScope.launch {
+            val labels = getLabelsForEventUseCase(eventId)
+            labelsByEventId = labelsByEventId + (eventId to labels)
+        }
+    }
+
+    fun updateEvent(
+        eventId: String,
+        date: LocalDate,
+        time: LocalTime,
+        categoryId: String,
+        summary: String,
+        body: String,
+        placeText: String?,
+        labels: List<String>
+    ) {
+        viewModelScope.launch {
+            val occurredAt = date.atTime(time).atZone(zoneId).toInstant().toEpochMilli()
+            updateEventUseCase(
+                eventId = eventId,
+                categoryId = categoryId,
+                occurredAt = occurredAt,
+                summary = summary,
+                body = body,
+                placeText = placeText,
+                labels = labels
+            )
+            labelsByEventId = labelsByEventId + (eventId to labels)
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
         }
