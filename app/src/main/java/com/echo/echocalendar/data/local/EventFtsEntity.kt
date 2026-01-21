@@ -1,9 +1,9 @@
 package com.echo.echocalendar.data.local
 
 import androidx.room.Entity
-import androidx.room.Fts4
+import androidx.room.Fts5
 
-@Fts4
+@Fts5
 @Entity(tableName = "EventFts")
 data class EventFtsEntity(
     val eventId: String,
