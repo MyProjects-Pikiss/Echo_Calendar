@@ -7,6 +7,7 @@ import com.echo.echocalendar.data.local.MIGRATION_3_4
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
+import com.echo.echocalendar.domain.usecase.GetLabelsForEventUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
 import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
@@ -21,6 +22,7 @@ class AppContainer(context: Context) {
         .build()
 
     val deleteEventUseCase: DeleteEventUseCase = DeleteEventUseCase(database)
+    val getLabelsForEventUseCase: GetLabelsForEventUseCase = GetLabelsForEventUseCase(database)
     val saveEventUseCase: SaveEventUseCase = SaveEventUseCase(database)
     val updateEventUseCase: UpdateEventUseCase = UpdateEventUseCase(database)
     val searchEventsUseCase: SearchEventsUseCase = SearchEventsUseCase(database)

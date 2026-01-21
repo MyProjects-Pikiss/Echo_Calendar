@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
                     factory = CalendarViewModelFactory(
                         container.getEventsByDateUseCase,
                         container.getEventsByMonthUseCase,
+                        container.getLabelsForEventUseCase,
                         container.saveEventUseCase,
                         container.deleteEventUseCase,
                         container.updateEventUseCase

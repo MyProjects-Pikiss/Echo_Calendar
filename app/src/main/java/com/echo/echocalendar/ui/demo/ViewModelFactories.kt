@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
+import com.echo.echocalendar.domain.usecase.GetLabelsForEventUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
 import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
@@ -24,6 +25,7 @@ class SearchViewModelFactory(
 class CalendarViewModelFactory(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
+    private val getLabelsForEventUseCase: GetLabelsForEventUseCase,
     private val saveEventUseCase: SaveEventUseCase,
     private val deleteEventUseCase: DeleteEventUseCase,
     private val updateEventUseCase: UpdateEventUseCase
@@ -34,6 +36,7 @@ class CalendarViewModelFactory(
             return CalendarViewModel(
                 getEventsByDateUseCase,
                 getEventsByMonthUseCase,
+                getLabelsForEventUseCase,
                 saveEventUseCase,
                 deleteEventUseCase,
                 updateEventUseCase

@@ -123,6 +123,12 @@ fun MonthCalendarScreen(
         calendarViewModel.onMonthShown(shownMonth)
     }
 
+    LaunchedEffect(selectedEvent?.id) {
+        selectedEvent?.let { event ->
+            calendarViewModel.loadLabelsForEvent(event.id)
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val maxWidthPx = with(density) { maxWidth.toPx() }
         val popupWidthPx = with(density) { popupWidth.toPx() }
@@ -653,7 +659,8 @@ fun MonthCalendarScreen(
                             categoryId = event.categoryId,
                             summary = event.summary,
                             placeText = event.placeText.orEmpty(),
-                            labelsText = "",
+                            labelsText = calendarViewModel.labelsByEventId[event.id]?.joinToString(", ")
+                                .orEmpty(),
                             body = event.body
                         )
                     )
@@ -668,11 +675,17 @@ fun MonthCalendarScreen(
                     val occurredAt = Instant.ofEpochMilli(event.occurredAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
+                    val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
                     Text(text = "날짜: ${occurredAt.format(dateFormatter)}")
                     Text(text = "시간: ${occurredAt.format(timeFormatter)}")
                     Text(text = "제목: ${event.summary}")
-                    Text(text = "카테고리: ${event.categoryId}")
+                    val categoryName = CategoryDefaults.categories
+                        .firstOrNull { it.id == event.categoryId }
+                        ?.displayName
+                        ?: event.categoryId
+                    Text(text = "카테고리: $categoryName")
                     Text(text = "장소: ${event.placeText ?: "없음"}")
+                    Text(text = "라벨: ${labels.joinToString(", ").ifBlank { "없음" }}")
                     Text(text = "내용: ${event.body.ifBlank { "없음" }}")
                 }
             }
@@ -688,6 +701,7 @@ fun MonthCalendarScreen(
                         val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
                             .atZone(zoneId)
                             .toLocalDateTime()
+                        val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
                         pendingEdit = PendingEdit(
                             action = CrudAction.Update,
                             eventId = event.id,
@@ -698,7 +712,7 @@ fun MonthCalendarScreen(
                                 categoryId = event.categoryId,
                                 placeText = event.placeText.orEmpty(),
                                 body = event.body,
-                                labelsText = ""
+                                labelsText = labels.joinToString(", ")
                             )
                         )
                         isCategoryMenuOpen = false
@@ -728,17 +742,23 @@ fun MonthCalendarScreen(
                     val occurredAt = Instant.ofEpochMilli(event.occurredAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
+                    val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
                     val createdAt = Instant.ofEpochMilli(event.createdAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
                     val updatedAt = Instant.ofEpochMilli(event.updatedAt)
                         .atZone(zoneId)
                         .toLocalDateTime()
+                    val categoryName = CategoryDefaults.categories
+                        .firstOrNull { it.id == event.categoryId }
+                        ?.displayName
+                        ?: event.categoryId
                     Text(text = "ID: ${event.id}")
-                    Text(text = "카테고리: ${event.categoryId}")
+                    Text(text = "카테고리: $categoryName")
                     Text(text = "일시: ${occurredAt.format(dateFormatter)} ${occurredAt.format(timeFormatter)}")
                     Text(text = "제목: ${event.summary}")
                     Text(text = "장소: ${event.placeText ?: "없음"}")
+                    Text(text = "라벨: ${labels.joinToString(", ").ifBlank { "없음" }}")
                     Text(text = "내용: ${event.body.ifBlank { "없음" }}")
                     Text(text = "생성: ${createdAt.format(dateFormatter)} ${createdAt.format(timeFormatter)}")
                     Text(text = "수정: ${updatedAt.format(dateFormatter)} ${updatedAt.format(timeFormatter)}")
