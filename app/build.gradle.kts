@@ -5,6 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+if (plugins.hasPlugin("org.jetbrains.kotlin.kapt")) {
+    error("KAPT is not supported with Kotlin 2.x in this project. Use KSP instead.")
+}
+
 android {
     namespace = "com.echo.echocalendar"
     compileSdk {
