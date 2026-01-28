@@ -10,6 +10,6 @@ interface EventFtsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(eventFts: EventFtsEntity)
 
-    @Query("DELETE FROM EventFts WHERE eventId = :eventId")
+    @Query("DELETE FROM EventFts WHERE id = :eventId")
     suspend fun deleteByEventId(eventId: String)
 }
