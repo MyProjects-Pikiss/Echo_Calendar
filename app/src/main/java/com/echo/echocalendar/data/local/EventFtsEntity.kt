@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.Fts5
 
 @Fts5
-@Entity(tableName = "EventFts")
+@Entity(tableName = "EventFts", primaryKeys = ["eventId"])
 data class EventFtsEntity(
     val eventId: String,
     val summary: String,
