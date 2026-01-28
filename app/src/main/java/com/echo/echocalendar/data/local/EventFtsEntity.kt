@@ -3,6 +3,7 @@ package com.echo.echocalendar.data.local
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Fts5
+import androidx.room.PrimaryKey
 
 @Fts5(contentEntity = EventEntity::class)
 @Entity(tableName = "EventFts")
