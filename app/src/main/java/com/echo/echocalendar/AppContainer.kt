@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.echo.echocalendar.data.local.AppDatabase
 import com.echo.echocalendar.data.local.MIGRATION_3_4
+import com.echo.echocalendar.data.local.MIGRATION_4_5
+import com.echo.echocalendar.data.local.MIGRATION_5_6
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
@@ -17,7 +19,7 @@ class AppContainer(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "echo_calendar.db"
-    ).addMigrations(MIGRATION_3_4)
+    ).addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
         .fallbackToDestructiveMigration()
         .build()
 

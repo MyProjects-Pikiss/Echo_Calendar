@@ -12,13 +12,12 @@ import androidx.room.RoomDatabase
         EventFtsEntity::class,
         EventAlarmEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun eventDao(): EventDao
-    abstract fun eventFtsDao(): EventFtsDao
     abstract fun labelDao(): LabelDao
     abstract fun eventLabelDao(): EventLabelDao
     abstract fun eventAlarmDao(): EventAlarmDao

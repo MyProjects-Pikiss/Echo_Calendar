@@ -3,7 +3,6 @@ package com.echo.echocalendar.domain.usecase
 import androidx.room.withTransaction
 import com.echo.echocalendar.data.local.AppDatabase
 import com.echo.echocalendar.data.local.EventEntity
-import com.echo.echocalendar.data.local.EventFtsEntity
 import com.echo.echocalendar.data.local.EventLabelCrossRef
 import java.util.UUID
 
@@ -33,14 +32,6 @@ class SaveEventUseCase(
 
         database.withTransaction {
             database.eventDao().upsert(event)
-            database.eventFtsDao().upsert(
-                EventFtsEntity(
-                    eventId = eventId,
-                    summary = summary,
-                    body = body,
-                    placeText = placeText
-                )
-            )
             val labelDao = database.labelDao()
             val eventLabelDao = database.eventLabelDao()
             labels
