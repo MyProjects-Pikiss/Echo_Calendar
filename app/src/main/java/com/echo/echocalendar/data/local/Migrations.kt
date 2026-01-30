@@ -16,3 +16,17 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         )
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS EventFts")
+        db.execSQL(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS EventFts " +
+                "USING fts5(eventId, summary, body, placeText)"
+        )
+        db.execSQL(
+            "INSERT INTO EventFts(eventId, summary, body, placeText) " +
+                "SELECT id, summary, body, placeText FROM Event"
+        )
+    }
+}
