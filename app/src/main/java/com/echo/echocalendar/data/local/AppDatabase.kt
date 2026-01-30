@@ -18,7 +18,6 @@ import androidx.room.RoomDatabase
 abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun eventDao(): EventDao
-    abstract fun eventFtsDao(): EventFtsDao
     abstract fun labelDao(): LabelDao
     abstract fun eventLabelDao(): EventLabelDao
     abstract fun eventAlarmDao(): EventAlarmDao
