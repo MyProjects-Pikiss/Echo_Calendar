@@ -5,10 +5,10 @@ import androidx.room.Entity
 import androidx.room.Fts5
 import androidx.room.PrimaryKey
 
-@Fts5(contentEntity = EventEntity::class)
+@Fts5
 @Entity(tableName = "EventFts")
 data class EventFtsEntity(
-    @ColumnInfo(name = "id") val eventId: String,
+    @ColumnInfo(name = "eventId") val eventId: String,
     val summary: String,
     val body: String,
     val placeText: String?
