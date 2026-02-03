@@ -3,4 +3,12 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+}
+
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy.force("com.google.devtools.ksp:symbol-processing-api:2.0.21-1.0.26")
+        resolutionStrategy.force("com.google.devtools.ksp:symbol-processing:2.0.21-1.0.26")
+    }
 }
