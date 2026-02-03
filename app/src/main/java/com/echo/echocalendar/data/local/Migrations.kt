@@ -8,7 +8,7 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("DROP TABLE IF EXISTS EventFts")
         db.execSQL(
             "CREATE VIRTUAL TABLE IF NOT EXISTS EventFts " +
-                "USING fts5(summary, body, placeText, content='Event', content_rowid='rowid')"
+                "USING fts4(summary, body, placeText, content='Event', content_rowid='rowid')"
         )
         db.execSQL("INSERT INTO EventFts(EventFts) VALUES('rebuild')")
     }
@@ -19,7 +19,7 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("DROP TABLE IF EXISTS EventFts")
         db.execSQL(
             "CREATE VIRTUAL TABLE IF NOT EXISTS EventFts " +
-                "USING fts5(summary, body, placeText, content='Event', content_rowid='rowid')"
+                "USING fts4(summary, body, placeText, content='Event', content_rowid='rowid')"
         )
         db.execSQL("INSERT INTO EventFts(EventFts) VALUES('rebuild')")
     }
@@ -30,7 +30,7 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("DROP TABLE IF EXISTS EventFts")
         db.execSQL(
             "CREATE VIRTUAL TABLE IF NOT EXISTS EventFts " +
-                "USING fts5(eventId, summary, body, placeText)"
+                "USING fts4(eventId, summary, body, placeText)"
         )
         db.execSQL(
             "INSERT INTO EventFts(eventId, summary, body, placeText) " +
