@@ -8,8 +8,8 @@ espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.8.3"
 activityCompose = "1.8.2"
 composeBom = "2024.06.00"
-room = "2.6.1"
-ksp = "2.0.21-1.0.25"
+room = "2.8.4"
+ksp = "2.0.21-1.0.26"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
