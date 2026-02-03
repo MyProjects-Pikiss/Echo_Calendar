@@ -5,10 +5,3 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.ksp) apply false
 }
-
-allprojects {
-    configurations.configureEach {
-        resolutionStrategy.force("com.google.devtools.ksp:symbol-processing-api:2.3.4")
-        resolutionStrategy.force("com.google.devtools.ksp:symbol-processing:2.3.4")
-    }
-}
