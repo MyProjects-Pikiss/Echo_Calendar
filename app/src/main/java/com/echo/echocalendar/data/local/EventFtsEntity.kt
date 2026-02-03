@@ -1,10 +1,10 @@
 package com.echo.echocalendar.data.local
 
 import androidx.room.Entity
-import androidx.room.Fts5
+import androidx.room.Fts4
 import androidx.room.ColumnInfo
 
-@Fts5
+@Fts4
 @Entity(tableName = "EventFts")
 data class EventFtsEntity(
     @ColumnInfo(name = "eventId") val eventId: String,
