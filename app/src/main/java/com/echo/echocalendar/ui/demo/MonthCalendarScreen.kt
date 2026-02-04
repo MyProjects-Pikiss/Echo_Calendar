@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.DayOfWeek
 import java.time.Instant
@@ -80,6 +81,7 @@ import kotlin.math.roundToInt
 @Composable
 fun MonthCalendarScreen(
     calendarViewModel: CalendarViewModel,
+    searchViewModel: SearchViewModel,
     isOnline: Boolean
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
@@ -100,6 +102,7 @@ fun MonthCalendarScreen(
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     var wipMessage by remember { mutableStateOf<String?>(null) }
+    var isSearchOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
     val popupWidth = 240.dp
@@ -239,30 +242,6 @@ fun MonthCalendarScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = {
-                    editError = null
-                    isCategoryMenuOpen = false
-                    pendingEdit = PendingEdit(
-                        action = CrudAction.Create,
-                        eventId = null,
-                        date = calendarViewModel.selectedDate,
-                        draft = EventDraft(
-                            summary = "",
-                            timeText = "09:00",
-                            categoryId = CategoryDefaults.categories.first().id,
-                            placeText = "",
-                            body = "",
-                            labelsText = ""
-                        )
-                    )
-                }) {
-                    Text(text = "이벤트 추가")
-                }
-            }
             Spacer(modifier = Modifier.height(8.dp))
             if (calendarViewModel.eventsOfDay.isEmpty()) {
                 Text(text = "해당 날짜의 이벤트가 없습니다.")
@@ -340,13 +319,29 @@ fun MonthCalendarScreen(
                         ActionPickerRow(
                             firstLabel = "입력",
                             firstIcon = Icons.Default.Edit,
-                            firstMessage = "WIP(입력) - GPT-5.2-Codex",
                             secondLabel = "검색",
                             secondIcon = Icons.Default.Search,
-                            secondMessage = "WIP(검색) - GPT-5.2-Codex",
-                            onActionSelected = { message ->
+                            onFirstActionSelected = {
+                                editError = null
+                                isCategoryMenuOpen = false
+                                pendingEdit = PendingEdit(
+                                    action = CrudAction.Create,
+                                    eventId = null,
+                                    date = calendarViewModel.selectedDate,
+                                    draft = EventDraft(
+                                        summary = "",
+                                        timeText = "09:00",
+                                        categoryId = CategoryDefaults.categories.first().id,
+                                        placeText = "",
+                                        body = "",
+                                        labelsText = ""
+                                    )
+                                )
                                 isActionPickerOpen = false
-                                wipMessage = message
+                            },
+                            onSecondActionSelected = {
+                                isActionPickerOpen = false
+                                isSearchOpen = true
                             }
                         )
                     }
@@ -364,13 +359,15 @@ fun MonthCalendarScreen(
                         ActionPickerRow(
                             firstLabel = "AI 입력",
                             firstIcon = Icons.Default.Mic,
-                            firstMessage = "WIP(AI 입력) - GPT-5.2-Codex",
                             secondLabel = "AI 검색",
                             secondIcon = Icons.Default.Search,
-                            secondMessage = "WIP(AI 검색) - GPT-5.2-Codex",
-                            onActionSelected = { message ->
+                            onFirstActionSelected = {
                                 isActionPickerOpen = false
-                                wipMessage = message
+                                wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
+                            },
+                            onSecondActionSelected = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
                             }
                         )
                     }
@@ -437,6 +434,23 @@ fun MonthCalendarScreen(
                 isJumpDialogOpen = false
             }
         )
+    }
+
+    if (isSearchOpen) {
+        Dialog(onDismissRequest = { isSearchOpen = false }) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 320.dp, max = 640.dp)
+            ) {
+                SearchDemoScreen(
+                    searchViewModel = searchViewModel,
+                    calendarViewModel = calendarViewModel
+                )
+            }
+        }
     }
 
     wipMessage?.let { message ->
@@ -804,11 +818,10 @@ private fun ActionChoiceTile(
 private fun ActionPickerRow(
     firstLabel: String,
     firstIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    firstMessage: String,
     secondLabel: String,
     secondIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    secondMessage: String,
-    onActionSelected: (String) -> Unit
+    onFirstActionSelected: () -> Unit,
+    onSecondActionSelected: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -820,7 +833,7 @@ private fun ActionPickerRow(
         ActionChoiceTile(
             label = firstLabel,
             icon = firstIcon,
-            onClick = { onActionSelected(firstMessage) },
+            onClick = onFirstActionSelected,
             modifier = Modifier.weight(1f)
         )
         Divider(
@@ -832,7 +845,7 @@ private fun ActionPickerRow(
         ActionChoiceTile(
             label = secondLabel,
             icon = secondIcon,
-            onClick = { onActionSelected(secondMessage) },
+            onClick = onSecondActionSelected,
             modifier = Modifier.weight(1f)
         )
     }
