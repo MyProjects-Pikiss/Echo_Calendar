@@ -19,6 +19,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.echo.echocalendar.ui.demo.CalendarViewModel
 import com.echo.echocalendar.ui.demo.CalendarViewModelFactory
 import com.echo.echocalendar.ui.demo.MonthCalendarScreen
+import com.echo.echocalendar.ui.demo.SearchViewModel
+import com.echo.echocalendar.ui.demo.SearchViewModelFactory
 import com.echo.echocalendar.ui.theme.EchoCalendarTheme
 
 class MainActivity : ComponentActivity() {
@@ -38,9 +40,13 @@ class MainActivity : ComponentActivity() {
                         container.updateEventUseCase
                     )
                 )
+                val searchViewModel = viewModel<SearchViewModel>(
+                    factory = SearchViewModelFactory(container.searchEventsUseCase)
+                )
                 val isOnlineState = rememberIsOnline()
                 MonthCalendarScreen(
                     calendarViewModel = calendarViewModel,
+                    searchViewModel = searchViewModel,
                     isOnline = isOnlineState.value
                 )
             }

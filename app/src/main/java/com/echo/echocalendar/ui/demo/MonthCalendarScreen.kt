@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.DayOfWeek
 import java.time.Instant
@@ -80,6 +81,7 @@ import kotlin.math.roundToInt
 @Composable
 fun MonthCalendarScreen(
     calendarViewModel: CalendarViewModel,
+    searchViewModel: SearchViewModel,
     isOnline: Boolean
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
@@ -96,10 +98,10 @@ fun MonthCalendarScreen(
     var pendingDelete by remember { mutableStateOf<com.echo.echocalendar.data.local.EventEntity?>(null) }
     var isCategoryMenuOpen by remember { mutableStateOf(false) }
     var editError by remember { mutableStateOf<String?>(null) }
-    var rejectedAction by remember { mutableStateOf<RejectedAction?>(null) }
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     var wipMessage by remember { mutableStateOf<String?>(null) }
+    var isSearchOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
     val popupWidth = 240.dp
@@ -220,49 +222,6 @@ fun MonthCalendarScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
-            rejectedAction?.let { rejected ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "확인 취소됨: ${rejected.title}",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(text = rejected.details)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = {
-                    editError = null
-                    isCategoryMenuOpen = false
-                    pendingEdit = PendingEdit(
-                        action = CrudAction.Create,
-                        eventId = null,
-                        date = calendarViewModel.selectedDate,
-                        draft = EventDraft(
-                            summary = "",
-                            timeText = "09:00",
-                            categoryId = CategoryDefaults.categories.first().id,
-                            placeText = "",
-                            body = "",
-                            labelsText = ""
-                        )
-                    )
-                }) {
-                    Text(text = "이벤트 추가")
-                }
-            }
             Spacer(modifier = Modifier.height(8.dp))
             if (calendarViewModel.eventsOfDay.isEmpty()) {
                 Text(text = "해당 날짜의 이벤트가 없습니다.")
@@ -340,13 +299,29 @@ fun MonthCalendarScreen(
                         ActionPickerRow(
                             firstLabel = "입력",
                             firstIcon = Icons.Default.Edit,
-                            firstMessage = "WIP(입력) - GPT-5.2-Codex",
                             secondLabel = "검색",
                             secondIcon = Icons.Default.Search,
-                            secondMessage = "WIP(검색) - GPT-5.2-Codex",
-                            onActionSelected = { message ->
+                            onFirstActionSelected = {
+                                editError = null
+                                isCategoryMenuOpen = false
+                                pendingEdit = PendingEdit(
+                                    action = CrudAction.Create,
+                                    eventId = null,
+                                    date = calendarViewModel.selectedDate,
+                                    draft = EventDraft(
+                                        summary = "",
+                                        timeText = "09:00",
+                                        categoryId = CategoryDefaults.categories.first().id,
+                                        placeText = "",
+                                        body = "",
+                                        labelsText = ""
+                                    )
+                                )
                                 isActionPickerOpen = false
-                                wipMessage = message
+                            },
+                            onSecondActionSelected = {
+                                isActionPickerOpen = false
+                                isSearchOpen = true
                             }
                         )
                     }
@@ -364,13 +339,15 @@ fun MonthCalendarScreen(
                         ActionPickerRow(
                             firstLabel = "AI 입력",
                             firstIcon = Icons.Default.Mic,
-                            firstMessage = "WIP(AI 입력) - GPT-5.2-Codex",
                             secondLabel = "AI 검색",
                             secondIcon = Icons.Default.Search,
-                            secondMessage = "WIP(AI 검색) - GPT-5.2-Codex",
-                            onActionSelected = { message ->
+                            onFirstActionSelected = {
                                 isActionPickerOpen = false
-                                wipMessage = message
+                                wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
+                            },
+                            onSecondActionSelected = {
+                                isActionPickerOpen = false
+                                wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
                             }
                         )
                     }
@@ -437,6 +414,23 @@ fun MonthCalendarScreen(
                 isJumpDialogOpen = false
             }
         )
+    }
+
+    if (isSearchOpen) {
+        Dialog(onDismissRequest = { isSearchOpen = false }) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 320.dp, max = 640.dp)
+            ) {
+                SearchDemoScreen(
+                    searchViewModel = searchViewModel,
+                    calendarViewModel = calendarViewModel
+                )
+            }
+        }
     }
 
     wipMessage?.let { message ->
@@ -514,22 +508,6 @@ fun MonthCalendarScreen(
             },
             dismissButton = {
                 TextButton(onClick = {
-                    rejectedAction = RejectedAction(
-                        title = when (editState.action) {
-                            CrudAction.Create -> "이벤트 생성"
-                            CrudAction.Update -> "이벤트 수정"
-                            CrudAction.Delete -> "이벤트 삭제"
-                        },
-                        details = buildActionDetails(
-                            date = editState.date,
-                            timeText = editState.draft.timeText,
-                            categoryId = editState.draft.categoryId,
-                            summary = editState.draft.summary,
-                            placeText = editState.draft.placeText,
-                            labelsText = editState.draft.labelsText,
-                            body = editState.draft.body
-                        )
-                    )
                     pendingEdit = null
                     editError = null
                 }) {
@@ -648,22 +626,6 @@ fun MonthCalendarScreen(
             },
             dismissButton = {
                 TextButton(onClick = {
-                    val occurredAt = Instant.ofEpochMilli(event.occurredAt)
-                        .atZone(zoneId)
-                        .toLocalDateTime()
-                    rejectedAction = RejectedAction(
-                        title = "이벤트 삭제",
-                        details = buildActionDetails(
-                            date = occurredAt.toLocalDate(),
-                            timeText = timeFormatter.format(occurredAt),
-                            categoryId = event.categoryId,
-                            summary = event.summary,
-                            placeText = event.placeText.orEmpty(),
-                            labelsText = calendarViewModel.labelsByEventId[event.id]?.joinToString(", ")
-                                .orEmpty(),
-                            body = event.body
-                        )
-                    )
                     pendingDelete = null
                 }) {
                     Text(text = "취소")
@@ -804,11 +766,10 @@ private fun ActionChoiceTile(
 private fun ActionPickerRow(
     firstLabel: String,
     firstIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    firstMessage: String,
     secondLabel: String,
     secondIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    secondMessage: String,
-    onActionSelected: (String) -> Unit
+    onFirstActionSelected: () -> Unit,
+    onSecondActionSelected: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -820,7 +781,7 @@ private fun ActionPickerRow(
         ActionChoiceTile(
             label = firstLabel,
             icon = firstIcon,
-            onClick = { onActionSelected(firstMessage) },
+            onClick = onFirstActionSelected,
             modifier = Modifier.weight(1f)
         )
         Divider(
@@ -832,7 +793,7 @@ private fun ActionPickerRow(
         ActionChoiceTile(
             label = secondLabel,
             icon = secondIcon,
-            onClick = { onActionSelected(secondMessage) },
+            onClick = onSecondActionSelected,
             modifier = Modifier.weight(1f)
         )
     }
@@ -897,34 +858,6 @@ private data class PendingEdit(
     val date: LocalDate,
     val draft: EventDraft
 )
-
-private data class RejectedAction(
-    val title: String,
-    val details: String
-)
-
-private fun buildActionDetails(
-    date: LocalDate,
-    timeText: String,
-    categoryId: String,
-    summary: String,
-    placeText: String,
-    labelsText: String,
-    body: String
-): String {
-    val safePlace = placeText.ifBlank { "없음" }
-    val safeLabels = labelsText.ifBlank { "없음" }
-    val safeBody = body.ifBlank { "없음" }
-    return buildString {
-        append("날짜: ").append(date).append('\n')
-        append("시간: ").append(timeText).append('\n')
-        append("카테고리: ").append(categoryId).append('\n')
-        append("제목: ").append(summary).append('\n')
-        append("장소: ").append(safePlace).append('\n')
-        append("라벨: ").append(safeLabels).append('\n')
-        append("내용: ").append(safeBody)
-    }
-}
 
 private val fixedHolidays = mapOf(
     MonthDay.of(1, 1) to "신정",
