@@ -29,7 +29,9 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun SearchDemoScreen(
     searchViewModel: SearchViewModel,
-    calendarViewModel: CalendarViewModel
+    calendarViewModel: CalendarViewModel,
+    onEventSelected: (() -> Unit)? = null,
+    showSelectedDateSummary: Boolean = true
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
@@ -78,6 +80,7 @@ fun SearchDemoScreen(
                         .padding(vertical = 4.dp)
                         .clickable {
                             calendarViewModel.onDateSelected(date)
+                            onEventSelected?.invoke()
                         }
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -90,19 +93,21 @@ fun SearchDemoScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Column(modifier = Modifier.padding(top = 8.dp)) {
-            if (calendarViewModel.eventsOfDay.isEmpty()) {
-                Text("해당 날짜의 이벤트가 없습니다.")
-            } else {
-                calendarViewModel.eventsOfDay.forEach { event ->
-                    Text("• ${event.summary}")
+        if (showSelectedDateSummary) {
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                if (calendarViewModel.eventsOfDay.isEmpty()) {
+                    Text("해당 날짜의 이벤트가 없습니다.")
+                } else {
+                    calendarViewModel.eventsOfDay.forEach { event ->
+                        Text("• ${event.summary}")
+                    }
                 }
             }
         }
