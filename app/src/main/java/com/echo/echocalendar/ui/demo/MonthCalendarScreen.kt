@@ -427,7 +427,9 @@ fun MonthCalendarScreen(
             ) {
                 SearchDemoScreen(
                     searchViewModel = searchViewModel,
-                    calendarViewModel = calendarViewModel
+                    calendarViewModel = calendarViewModel,
+                    onEventSelected = { isSearchOpen = false },
+                    showSelectedDateSummary = false
                 )
             }
         }
