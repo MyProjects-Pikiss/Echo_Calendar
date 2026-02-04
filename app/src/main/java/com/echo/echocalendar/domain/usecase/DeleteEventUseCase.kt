@@ -9,6 +9,7 @@ class DeleteEventUseCase(
     suspend operator fun invoke(eventId: String) {
         database.withTransaction {
             database.eventLabelDao().deleteByEventId(eventId)
+            database.eventFtsDao().deleteByEventId(eventId)
             database.eventDao().deleteById(eventId)
         }
     }
