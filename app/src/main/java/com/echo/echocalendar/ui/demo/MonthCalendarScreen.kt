@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -264,6 +265,19 @@ fun MonthCalendarScreen(
             }
         }
 
+        if (isActionPickerOpen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        isActionPickerOpen = false
+                    }
+            )
+        }
+
         AnimatedVisibility(
             visible = isActionPickerOpen,
             modifier = Modifier
@@ -321,6 +335,7 @@ fun MonthCalendarScreen(
                             },
                             onSecondActionSelected = {
                                 isActionPickerOpen = false
+                                searchViewModel.resetSearch()
                                 isSearchOpen = true
                             }
                         )
@@ -417,7 +432,10 @@ fun MonthCalendarScreen(
     }
 
     if (isSearchOpen) {
-        Dialog(onDismissRequest = { isSearchOpen = false }) {
+        Dialog(onDismissRequest = {
+            searchViewModel.resetSearch()
+            isSearchOpen = false
+        }) {
             Surface(
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 4.dp,
@@ -428,7 +446,10 @@ fun MonthCalendarScreen(
                 SearchDemoScreen(
                     searchViewModel = searchViewModel,
                     calendarViewModel = calendarViewModel,
-                    onEventSelected = { isSearchOpen = false },
+                    onEventSelected = {
+                        searchViewModel.resetSearch()
+                        isSearchOpen = false
+                    },
                     showSelectedDateSummary = false
                 )
             }
