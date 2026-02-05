@@ -45,4 +45,11 @@ class SearchViewModel(
             }
         }
     }
+
+    fun resetSearch() {
+        query = ""
+        results = emptyList()
+        isLoading = false
+        error = null
+    }
 }

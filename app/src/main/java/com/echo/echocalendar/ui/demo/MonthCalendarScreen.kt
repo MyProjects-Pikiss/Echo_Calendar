@@ -321,6 +321,7 @@ fun MonthCalendarScreen(
                             },
                             onSecondActionSelected = {
                                 isActionPickerOpen = false
+                                searchViewModel.resetSearch()
                                 isSearchOpen = true
                             }
                         )
@@ -417,7 +418,10 @@ fun MonthCalendarScreen(
     }
 
     if (isSearchOpen) {
-        Dialog(onDismissRequest = { isSearchOpen = false }) {
+        Dialog(onDismissRequest = {
+            searchViewModel.resetSearch()
+            isSearchOpen = false
+        }) {
             Surface(
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 4.dp,
@@ -428,7 +432,10 @@ fun MonthCalendarScreen(
                 SearchDemoScreen(
                     searchViewModel = searchViewModel,
                     calendarViewModel = calendarViewModel,
-                    onEventSelected = { isSearchOpen = false },
+                    onEventSelected = {
+                        searchViewModel.resetSearch()
+                        isSearchOpen = false
+                    },
                     showSelectedDateSummary = false
                 )
             }
