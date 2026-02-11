@@ -17,6 +17,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "AI_API_BASE_URL", "\"\"")
+        buildConfigField("String", "AI_API_KEY", "\"\"")
+        buildConfigField("int", "AI_API_TIMEOUT_MS", "12000")
     }
 
     buildTypes {

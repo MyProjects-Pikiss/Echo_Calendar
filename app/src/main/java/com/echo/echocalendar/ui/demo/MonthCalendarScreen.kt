@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +85,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -111,6 +113,8 @@ fun MonthCalendarScreen(
     var isSearchOpen by remember { mutableStateOf(false) }
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val aiAssistantService = remember { AiAssistantService(HttpAiApiGateway()) }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -127,39 +131,63 @@ fun MonthCalendarScreen(
             aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
             return@rememberLauncherForActivityResult
         }
-        when (pendingAiAction) {
-            AiAction.Input -> {
-                val suggestion = AiAssistantInterpreter.suggestInput(
-                    transcript = transcript,
-                    selectedDate = calendarViewModel.selectedDate
-                )
-                pendingEdit = PendingEdit(
-                    action = CrudAction.Create,
-                    eventId = null,
-                    date = suggestion.date,
-                    draft = EventDraft(
-                        summary = suggestion.summary,
-                        timeText = suggestion.timeText,
-                        categoryId = suggestion.categoryId,
-                        placeText = suggestion.placeText,
-                        body = suggestion.body,
-                        labelsText = suggestion.labelsText
+        when (val action = pendingAiAction) {
+            is AiAction.Input -> {
+                coroutineScope.launch {
+                    val suggestion = aiAssistantService.suggestInput(
+                        transcript = transcript,
+                        selectedDate = calendarViewModel.selectedDate
                     )
-                )
-                isCategoryMenuOpen = false
-                editError = suggestion.missingRequired
-                    .takeIf { it.isNotEmpty() }
-                    ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
-            }
-            AiAction.Search -> {
-                val suggestion = AiAssistantInterpreter.suggestSearchQuery(transcript)
-                if (suggestion.query.isBlank()) {
-                    aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
-                    return@rememberLauncherForActivityResult
+                    pendingEdit = PendingEdit(
+                        action = CrudAction.Create,
+                        eventId = null,
+                        date = suggestion.date,
+                        draft = EventDraft(
+                            summary = suggestion.summary,
+                            timeText = suggestion.timeText,
+                            categoryId = suggestion.categoryId,
+                            placeText = suggestion.placeText,
+                            body = suggestion.body,
+                            labelsText = suggestion.labelsText
+                        )
+                    )
+                    isCategoryMenuOpen = false
+                    editError = suggestion.missingRequired
+                        .takeIf { it.isNotEmpty() }
+                        ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
                 }
-                searchViewModel.onQueryChange(suggestion.query)
-                searchViewModel.onSearchSubmit()
-                isSearchOpen = true
+            }
+            is AiAction.Search -> {
+                coroutineScope.launch {
+                    val suggestion = aiAssistantService.suggestSearch(transcript)
+                    if (suggestion.query.isBlank()) {
+                        aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
+                        return@launch
+                    }
+                    searchViewModel.onQueryChange(suggestion.query)
+                    searchViewModel.onSearchSubmit()
+                    isSearchOpen = true
+                }
+            }
+            is AiAction.RefineField -> {
+                val editState = pendingEdit
+                if (editState == null) {
+                    aiErrorMessage = "편집 중인 항목이 없어요."
+                } else {
+                    val currentValue = valueOfField(editState.draft, action.field)
+                    coroutineScope.launch {
+                        val refined = aiAssistantService.refineField(
+                            transcript = transcript,
+                            field = action.field,
+                            currentValue = currentValue,
+                            selectedDate = editState.date
+                        )
+                        pendingEdit = editState.copy(draft = applyFieldValue(editState.draft, refined.field, refined.value))
+                        editError = refined.missingRequired
+                            .takeIf { it.isNotEmpty() }
+                            ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
+                    }
+                }
             }
             null -> Unit
         }
@@ -634,6 +662,14 @@ fun MonthCalendarScreen(
                             editError = null
                         },
                         label = { Text(text = "제목") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                pendingAiAction = AiAction.RefineField(DraftField.Summary)
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "제목 음성 보완")
+                            }
+                        },
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -645,14 +681,28 @@ fun MonthCalendarScreen(
                             editError = null
                         },
                         label = { Text(text = "시간 (HH:mm)") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                pendingAiAction = AiAction.RefineField(DraftField.Time)
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "시간 음성 보완")
+                            }
+                        },
                         singleLine = true
                     )
-                    Box {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isCategoryMenuOpen = true }) {
                             val selectedCategory = CategoryDefaults.categories
                                 .firstOrNull { it.id == editState.draft.categoryId }
                             val label = selectedCategory?.displayName ?: editState.draft.categoryId
                             Text(text = "카테고리: $label")
+                        }
+                        IconButton(onClick = {
+                            pendingAiAction = AiAction.RefineField(DraftField.Category)
+                            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }) {
+                            Icon(imageVector = Icons.Default.Mic, contentDescription = "카테고리 음성 보완")
                         }
                         DropdownMenu(
                             expanded = isCategoryMenuOpen,
@@ -681,6 +731,14 @@ fun MonthCalendarScreen(
                             editError = null
                         },
                         label = { Text(text = "장소") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                pendingAiAction = AiAction.RefineField(DraftField.Place)
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "장소 음성 보완")
+                            }
+                        },
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -692,6 +750,14 @@ fun MonthCalendarScreen(
                             editError = null
                         },
                         label = { Text(text = "라벨 (쉼표로 구분)") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                pendingAiAction = AiAction.RefineField(DraftField.Labels)
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "라벨 음성 보완")
+                            }
+                        },
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -702,7 +768,15 @@ fun MonthCalendarScreen(
                             )
                             editError = null
                         },
-                        label = { Text(text = "내용") }
+                        label = { Text(text = "내용") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                pendingAiAction = AiAction.RefineField(DraftField.Body)
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "내용 음성 보완")
+                            }
+                        }
                     )
                     editError?.let { message ->
                         Text(text = message, color = MaterialTheme.colorScheme.error)
@@ -936,9 +1010,10 @@ private enum class InputTrigger {
     Microphone
 }
 
-private enum class AiAction {
-    Input,
-    Search
+private sealed interface AiAction {
+    data object Input : AiAction
+    data object Search : AiAction
+    data class RefineField(val field: DraftField) : AiAction
 }
 
 private enum class CrudAction {
@@ -990,6 +1065,24 @@ private fun validateDraft(
         return DraftValidationResult(parsedTime = null, errorMessage = "내용을 입력하세요.")
     }
     return DraftValidationResult(parsedTime = parsedTime, errorMessage = null)
+}
+
+private fun valueOfField(draft: EventDraft, field: DraftField): String = when (field) {
+    DraftField.Summary -> draft.summary
+    DraftField.Time -> draft.timeText
+    DraftField.Category -> draft.categoryId
+    DraftField.Place -> draft.placeText
+    DraftField.Labels -> draft.labelsText
+    DraftField.Body -> draft.body
+}
+
+private fun applyFieldValue(draft: EventDraft, field: DraftField, value: String): EventDraft = when (field) {
+    DraftField.Summary -> draft.copy(summary = value)
+    DraftField.Time -> draft.copy(timeText = value)
+    DraftField.Category -> draft.copy(categoryId = value)
+    DraftField.Place -> draft.copy(placeText = value)
+    DraftField.Labels -> draft.copy(labelsText = value)
+    DraftField.Body -> draft.copy(body = value)
 }
 
 private val fixedHolidays = mapOf(

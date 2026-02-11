@@ -3,21 +3,6 @@ package com.echo.echocalendar.ui.demo
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.LocalDate
 
-data class AiInputSuggestion(
-    val date: LocalDate,
-    val summary: String,
-    val timeText: String,
-    val categoryId: String,
-    val placeText: String,
-    val body: String,
-    val labelsText: String,
-    val missingRequired: List<String>
-)
-
-data class AiSearchSuggestion(
-    val query: String
-)
-
 object AiAssistantInterpreter {
     fun suggestInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion {
         val normalized = transcript.trim()
@@ -55,12 +40,30 @@ object AiAssistantInterpreter {
         return AiSearchSuggestion(query = cleaned.ifBlank { transcript.trim() })
     }
 
+    fun refineField(
+        field: DraftField,
+        transcript: String,
+        currentValue: String,
+        selectedDate: LocalDate
+    ): AiRefineSuggestion {
+        val inputSuggestion = suggestInput(transcript, selectedDate)
+        val value = when (field) {
+            DraftField.Summary -> inputSuggestion.summary.ifBlank { currentValue }
+            DraftField.Time -> inputSuggestion.timeText.ifBlank { currentValue }
+            DraftField.Category -> inputSuggestion.categoryId.ifBlank { currentValue }
+            DraftField.Place -> inputSuggestion.placeText.ifBlank { currentValue }
+            DraftField.Labels -> inputSuggestion.labelsText.ifBlank { currentValue }
+            DraftField.Body -> inputSuggestion.body.ifBlank { currentValue }
+        }
+        return AiRefineSuggestion(field = field, value = value, missingRequired = inputSuggestion.missingRequired)
+    }
+
     private fun extractTimeText(source: String): String? {
-        val colonMatch = Regex("""\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b""").find(source)
+        val colonMatch = Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b""").find(source)
         if (colonMatch != null) {
             return colonMatch.value
         }
-        val hourMinuteMatch = Regex("""([01]?\\d|2[0-3])\\s*시(?:\\s*([0-5]?\\d)\\s*분?)?""").find(source)
+        val hourMinuteMatch = Regex("""([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?""").find(source)
         if (hourMinuteMatch != null) {
             val hour = hourMinuteMatch.groupValues[1].padStart(2, '0')
             val minute = hourMinuteMatch.groupValues[2].ifBlank { "00" }.padStart(2, '0')
@@ -71,13 +74,13 @@ object AiAssistantInterpreter {
 
     private fun extractSummary(source: String): String {
         if (source.isBlank()) return ""
-        val explicit = Regex("""제목(?:은|:)?\\s*(.+)""").find(source)?.groupValues?.getOrNull(1)?.trim()
+        val explicit = Regex("""제목(?:은|:)?\s*(.+)""").find(source)?.groupValues?.getOrNull(1)?.trim()
         if (!explicit.isNullOrBlank()) {
             return explicit.take(40)
         }
         return source
-            .replace(Regex("""\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b"""), "")
-            .replace(Regex("""([01]?\\d|2[0-3])\\s*시(?:\\s*([0-5]?\\d)\\s*분?)?"""), "")
+            .replace(Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b"""), "")
+            .replace(Regex("""([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?"""), "")
             .trim()
             .take(40)
     }
@@ -91,12 +94,12 @@ object AiAssistantInterpreter {
     }
 
     private fun extractPlaceText(source: String): String? {
-        val match = Regex("""(?:장소|위치)(?:는|:)?\\s*([^,\\n]+)""").find(source)
+        val match = Regex("""(?:장소|위치)(?:는|:)?\s*([^,\n]+)""").find(source)
         return match?.groupValues?.getOrNull(1)?.trim()
     }
 
     private fun extractLabels(source: String): List<String> {
-        val match = Regex("""(?:라벨|태그)(?:은|:)?\\s*([^\\n]+)""").find(source)
+        val match = Regex("""(?:라벨|태그)(?:은|:)?\s*([^\n]+)""").find(source)
         return match?.groupValues
             ?.getOrNull(1)
             ?.split(",")
@@ -105,4 +108,3 @@ object AiAssistantInterpreter {
             .orEmpty()
     }
 }
-
