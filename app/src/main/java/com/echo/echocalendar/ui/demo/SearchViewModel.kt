@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import kotlinx.coroutines.launch
 
 class SearchViewModel(
@@ -36,6 +38,11 @@ class SearchViewModel(
         if (currentQuery.isEmpty()) {
             results = emptyList()
             error = null
+            return
+        }
+        val validationError = validateFilters(dateFromFilter, dateToFilter)
+        if (validationError != null) {
+            error = validationError
             return
         }
         viewModelScope.launch {
@@ -82,10 +89,23 @@ class SearchViewModel(
             .filter { it.isNotBlank() }
     }
 
+    fun toggleCategoryFilter(categoryId: String) {
+        val id = categoryId.trim()
+        if (id.isBlank()) return
+        categoryFilters = if (id in categoryFilters) {
+            categoryFilters - id
+        } else {
+            categoryFilters + id
+        }
+    }
+
     fun clearFilters() {
         dateFromFilter = null
         dateToFilter = null
         categoryFilters = emptyList()
+        if (query.isNotBlank()) {
+            onSearchSubmit()
+        }
     }
 
     fun resetSearch() {
@@ -96,5 +116,29 @@ class SearchViewModel(
         dateFromFilter = null
         dateToFilter = null
         categoryFilters = emptyList()
+    }
+
+    private fun validateFilters(dateFrom: String?, dateTo: String?): String? {
+        val parsedFrom = when {
+            dateFrom.isNullOrBlank() -> null
+            else -> parseDate(dateFrom) ?: return "시작일 형식은 yyyy-MM-dd 입니다."
+        }
+        val parsedTo = when {
+            dateTo.isNullOrBlank() -> null
+            else -> parseDate(dateTo) ?: return "종료일 형식은 yyyy-MM-dd 입니다."
+        }
+        if (parsedFrom != null && parsedTo != null && parsedFrom.isAfter(parsedTo)) {
+            return "시작일은 종료일보다 늦을 수 없어요."
+        }
+        return null
+    }
+
+    private fun parseDate(value: String?): LocalDate? {
+        if (value.isNullOrBlank()) return null
+        return try {
+            LocalDate.parse(value.trim())
+        } catch (_: DateTimeParseException) {
+            null
+        }
     }
 }
