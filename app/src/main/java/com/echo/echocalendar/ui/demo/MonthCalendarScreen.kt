@@ -1,5 +1,11 @@
 package com.echo.echocalendar.ui.demo
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.tween
@@ -76,6 +82,7 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -101,8 +108,80 @@ fun MonthCalendarScreen(
     var editError by remember { mutableStateOf<String?>(null) }
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
-    var wipMessage by remember { mutableStateOf<String?>(null) }
     var isSearchOpen by remember { mutableStateOf(false) }
+    var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
+    var aiErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) {
+            aiErrorMessage = "음성 인식이 취소되었어요."
+            return@rememberLauncherForActivityResult
+        }
+        val matches = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            .orEmpty()
+        val transcript = matches.firstOrNull()?.trim().orEmpty()
+        if (transcript.isBlank()) {
+            aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
+            return@rememberLauncherForActivityResult
+        }
+        when (pendingAiAction) {
+            AiAction.Input -> {
+                val suggestion = AiAssistantInterpreter.suggestInput(
+                    transcript = transcript,
+                    selectedDate = calendarViewModel.selectedDate
+                )
+                pendingEdit = PendingEdit(
+                    action = CrudAction.Create,
+                    eventId = null,
+                    date = suggestion.date,
+                    draft = EventDraft(
+                        summary = suggestion.summary,
+                        timeText = suggestion.timeText,
+                        categoryId = suggestion.categoryId,
+                        placeText = suggestion.placeText,
+                        body = suggestion.body,
+                        labelsText = suggestion.labelsText
+                    )
+                )
+                isCategoryMenuOpen = false
+                editError = suggestion.missingRequired
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
+            }
+            AiAction.Search -> {
+                val suggestion = AiAssistantInterpreter.suggestSearchQuery(transcript)
+                if (suggestion.query.isBlank()) {
+                    aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
+                    return@rememberLauncherForActivityResult
+                }
+                searchViewModel.onQueryChange(suggestion.query)
+                searchViewModel.onSearchSubmit()
+                isSearchOpen = true
+            }
+            null -> Unit
+        }
+        pendingAiAction = null
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            aiErrorMessage = "음성 인식을 사용하려면 마이크 권한이 필요해요."
+            pendingAiAction = null
+            return@rememberLauncherForActivityResult
+        }
+        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "말씀하신 내용을 AI 입력/검색으로 처리할게요")
+        }
+        speechRecognizerLauncher.launch(speechIntent)
+    }
+
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
     val bottomBarHeight = 72.dp
     val popupWidth = 240.dp
@@ -358,11 +437,13 @@ fun MonthCalendarScreen(
                             secondIcon = Icons.Default.Search,
                             onFirstActionSelected = {
                                 isActionPickerOpen = false
-                                wipMessage = "WIP(AI 입력) - GPT-5.2-Codex"
+                                pendingAiAction = AiAction.Input
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             },
                             onSecondActionSelected = {
                                 isActionPickerOpen = false
-                                wipMessage = "WIP(AI 검색) - GPT-5.2-Codex"
+                                pendingAiAction = AiAction.Search
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             }
                         )
                     }
@@ -456,15 +537,16 @@ fun MonthCalendarScreen(
         }
     }
 
-    wipMessage?.let { message ->
+
+    aiErrorMessage?.let { message ->
         AlertDialog(
-            onDismissRequest = { wipMessage = null },
+            onDismissRequest = { aiErrorMessage = null },
             confirmButton = {
-                TextButton(onClick = { wipMessage = null }) {
+                TextButton(onClick = { aiErrorMessage = null }) {
                     Text(text = "확인")
                 }
             },
-            title = { Text(text = "Working in progress") },
+            title = { Text(text = "AI 처리 안내") },
             text = { Text(text = message) }
         )
     }
@@ -474,23 +556,17 @@ fun MonthCalendarScreen(
             onDismissRequest = { pendingEdit = null },
             confirmButton = {
                 Button(onClick = {
+                    val validationResult = validateDraft(
+                        draft = editState.draft,
+                        inputTimeFormatter = inputTimeFormatter
+                    )
+                    if (validationResult.errorMessage != null) {
+                        editError = validationResult.errorMessage
+                        return@Button
+                    }
+                    val parsedTime = validationResult.parsedTime ?: return@Button
                     val summary = editState.draft.summary.trim()
-                    if (summary.isBlank()) {
-                        editError = "제목을 입력하세요."
-                        return@Button
-                    }
-                    val parsedTime = runCatching {
-                        LocalTime.parse(editState.draft.timeText.trim(), inputTimeFormatter)
-                    }.getOrNull()
-                    if (parsedTime == null) {
-                        editError = "시간 형식은 HH:mm 입니다."
-                        return@Button
-                    }
                     val body = editState.draft.body.trim()
-                    if (body.isBlank()) {
-                        editError = "내용을 입력하세요."
-                        return@Button
-                    }
                     val labels = editState.draft.labelsText
                         .split(",")
                         .map { it.trim() }
@@ -860,6 +936,11 @@ private enum class InputTrigger {
     Microphone
 }
 
+private enum class AiAction {
+    Input,
+    Search
+}
+
 private enum class CrudAction {
     Create,
     Update,
@@ -881,6 +962,35 @@ private data class PendingEdit(
     val date: LocalDate,
     val draft: EventDraft
 )
+
+private data class DraftValidationResult(
+    val parsedTime: LocalTime?,
+    val errorMessage: String?
+)
+
+private fun validateDraft(
+    draft: EventDraft,
+    inputTimeFormatter: DateTimeFormatter
+): DraftValidationResult {
+    val summary = draft.summary.trim()
+    if (summary.isBlank()) {
+        return DraftValidationResult(parsedTime = null, errorMessage = "제목을 입력하세요.")
+    }
+    if (draft.categoryId.isBlank()) {
+        return DraftValidationResult(parsedTime = null, errorMessage = "카테고리를 선택하세요.")
+    }
+    val parsedTime = runCatching {
+        LocalTime.parse(draft.timeText.trim(), inputTimeFormatter)
+    }.getOrNull()
+    if (parsedTime == null) {
+        return DraftValidationResult(parsedTime = null, errorMessage = "시간 형식은 HH:mm 입니다.")
+    }
+    val body = draft.body.trim()
+    if (body.isBlank()) {
+        return DraftValidationResult(parsedTime = null, errorMessage = "내용을 입력하세요.")
+    }
+    return DraftValidationResult(parsedTime = parsedTime, errorMessage = null)
+}
 
 private val fixedHolidays = mapOf(
     MonthDay.of(1, 1) to "신정",
