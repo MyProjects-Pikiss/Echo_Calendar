@@ -1,0 +1,43 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug Kotlin sources
+        env:
+          AI_API_BASE_URL_DEBUG: ${{ secrets.AI_API_BASE_URL_DEBUG }}
+          AI_API_BASE_URL_RELEASE: ${{ secrets.AI_API_BASE_URL_RELEASE }}
+          AI_API_KEY_DEBUG: ${{ secrets.AI_API_KEY_DEBUG }}
+          AI_API_KEY_RELEASE: ${{ secrets.AI_API_KEY_RELEASE }}
+        run: |
+          ./gradlew :app:compileDebugKotlin --stacktrace \
+            -PAI_API_BASE_URL_DEBUG="${AI_API_BASE_URL_DEBUG}" \
+            -PAI_API_BASE_URL_RELEASE="${AI_API_BASE_URL_RELEASE}" \
+            -PAI_API_KEY_DEBUG="${AI_API_KEY_DEBUG}" \
+            -PAI_API_KEY_RELEASE="${AI_API_KEY_RELEASE}"
+
+      - name: Verify AI backend contract against local stub
+        run: |
+          python tools/ai_contract_server.py >/tmp/ai_stub.log 2>&1 &
+          STUB_PID=$!
+          trap 'kill ${STUB_PID} >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          python tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088

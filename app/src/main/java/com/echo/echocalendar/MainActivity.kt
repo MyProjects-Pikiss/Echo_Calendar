@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
                 MonthCalendarScreen(
                     calendarViewModel = calendarViewModel,
                     searchViewModel = searchViewModel,
+                    aiAssistantService = container.aiAssistantService,
                     isOnline = isOnlineState.value
                 )
             }
