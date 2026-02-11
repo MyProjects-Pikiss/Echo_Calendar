@@ -33,3 +33,11 @@ Set CI secrets/properties:
 - AI 검색: transcript -> query+filters
 - 필드 보완: transcript -> target field only
 - 원격 실패시 로컬 fallback 메시지 확인
+
+
+## E. Remote usage observability (must)
+
+- Check app logs for `AiAssistantService` events:
+  - `remote_success action=...`
+  - `remote_failure_fallback action=... reason=...`
+- During final smoke test, confirm at least one remote success for input/search/refine.

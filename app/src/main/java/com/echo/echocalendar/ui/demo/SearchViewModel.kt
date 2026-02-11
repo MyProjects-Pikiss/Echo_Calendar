@@ -9,6 +9,8 @@ import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class SearchViewModel(
@@ -31,6 +33,10 @@ class SearchViewModel(
     var aiFiltersApplied by mutableStateOf(false)
         private set
 
+    private var searchJob: Job? = null
+    private var pendingRefreshJob: Job? = null
+    private var lastExecutedKey: SearchRequestKey? = null
+
     fun onQueryChange(newQuery: String) {
         query = newQuery
     }
@@ -38,25 +44,44 @@ class SearchViewModel(
     fun onSearchSubmit() {
         val currentQuery = query.trim()
         if (currentQuery.isEmpty()) {
+            searchJob?.cancel()
+            pendingRefreshJob?.cancel()
+            lastExecutedKey = null
             results = emptyList()
             error = null
+            isLoading = false
             return
         }
+
         val validationError = validateFilters(dateFromFilter, dateToFilter)
         if (validationError != null) {
             error = validationError
             return
         }
-        viewModelScope.launch {
+
+        val requestKey = SearchRequestKey(
+            query = currentQuery,
+            dateFrom = dateFromFilter,
+            dateTo = dateToFilter,
+            categoryIds = categoryFilters.sorted()
+        )
+
+        if (requestKey == lastExecutedKey && searchJob?.isActive != true) {
+            return
+        }
+
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             isLoading = true
             error = null
             try {
                 results = searchEventsUseCase(
-                    query = currentQuery,
-                    dateFrom = dateFromFilter,
-                    dateTo = dateToFilter,
-                    categoryIds = categoryFilters
+                    query = requestKey.query,
+                    dateFrom = requestKey.dateFrom,
+                    dateTo = requestKey.dateTo,
+                    categoryIds = requestKey.categoryIds
                 )
+                lastExecutedKey = requestKey
             } catch (e: Exception) {
                 error = e.message ?: "Unknown error"
                 results = emptyList()
@@ -139,6 +164,8 @@ class SearchViewModel(
     }
 
     fun resetSearch() {
+        searchJob?.cancel()
+        pendingRefreshJob?.cancel()
         query = ""
         results = emptyList()
         isLoading = false
@@ -147,16 +174,20 @@ class SearchViewModel(
         dateToFilter = null
         categoryFilters = emptyList()
         aiFiltersApplied = false
+        lastExecutedKey = null
     }
 
-
     private fun refreshAfterFilterMutation() {
-        if (query.isNotBlank()) {
+        if (query.isBlank()) return
+        pendingRefreshJob?.cancel()
+        pendingRefreshJob = viewModelScope.launch {
+            delay(200)
             onSearchSubmit()
         }
     }
 
-    private fun validateFilters(dateFrom: String?, dateTo: String?): String? {        val parsedFrom = when {
+    private fun validateFilters(dateFrom: String?, dateTo: String?): String? {
+        val parsedFrom = when {
             dateFrom.isNullOrBlank() -> null
             else -> parseDate(dateFrom) ?: return "시작일 형식은 yyyy-MM-dd 입니다."
         }
@@ -179,3 +210,10 @@ class SearchViewModel(
         }
     }
 }
+
+data class SearchRequestKey(
+    val query: String,
+    val dateFrom: String?,
+    val dateTo: String?,
+    val categoryIds: List<String>
+)

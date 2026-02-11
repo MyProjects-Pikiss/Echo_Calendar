@@ -33,3 +33,11 @@ jobs:
             -PAI_API_BASE_URL_RELEASE="${AI_API_BASE_URL_RELEASE}" \
             -PAI_API_KEY_DEBUG="${AI_API_KEY_DEBUG}" \
             -PAI_API_KEY_RELEASE="${AI_API_KEY_RELEASE}"
+
+      - name: Verify AI backend contract against local stub
+        run: |
+          python tools/ai_contract_server.py >/tmp/ai_stub.log 2>&1 &
+          STUB_PID=$!
+          trap 'kill ${STUB_PID} >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          python tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
