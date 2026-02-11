@@ -164,8 +164,7 @@ fun MonthCalendarScreen(
                         aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
                         return@launch
                     }
-                    searchViewModel.onQueryChange(suggestion.query)
-                    searchViewModel.onSearchSubmit()
+                    searchViewModel.applyAiSearchSuggestion(suggestion)
                     isSearchOpen = true
                 }
             }

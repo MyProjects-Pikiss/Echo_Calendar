@@ -66,6 +66,24 @@ fun SearchDemoScreen(
                 color = MaterialTheme.colorScheme.error
             )
         }
+        val filterSummary = buildList {
+            searchViewModel.dateFromFilter?.let { add("시작일: $it") }
+            searchViewModel.dateToFilter?.let { add("종료일: $it") }
+            if (searchViewModel.categoryFilters.isNotEmpty()) {
+                add("카테고리: ${searchViewModel.categoryFilters.joinToString(", ")}")
+            }
+        }
+        if (filterSummary.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "AI 필터 적용됨",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            filterSummary.forEach { summary ->
+                Text(text = "• $summary", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "검색 결과",

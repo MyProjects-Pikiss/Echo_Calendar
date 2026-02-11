@@ -20,6 +20,12 @@ class SearchViewModel(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var dateFromFilter by mutableStateOf<String?>(null)
+        private set
+    var dateToFilter by mutableStateOf<String?>(null)
+        private set
+    var categoryFilters by mutableStateOf<List<String>>(emptyList())
+        private set
 
     fun onQueryChange(newQuery: String) {
         query = newQuery
@@ -36,7 +42,12 @@ class SearchViewModel(
             isLoading = true
             error = null
             try {
-                results = searchEventsUseCase(currentQuery)
+                results = searchEventsUseCase(
+                    query = currentQuery,
+                    dateFrom = dateFromFilter,
+                    dateTo = dateToFilter,
+                    categoryIds = categoryFilters
+                )
             } catch (e: Exception) {
                 error = e.message ?: "Unknown error"
                 results = emptyList()
@@ -46,10 +57,23 @@ class SearchViewModel(
         }
     }
 
+    fun applyAiSearchSuggestion(suggestion: AiSearchSuggestion) {
+        query = suggestion.query
+        dateFromFilter = suggestion.dateFrom?.trim()?.ifBlank { null }
+        dateToFilter = suggestion.dateTo?.trim()?.ifBlank { null }
+        categoryFilters = suggestion.categoryIds
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        onSearchSubmit()
+    }
+
     fun resetSearch() {
         query = ""
         results = emptyList()
         isLoading = false
         error = null
+        dateFromFilter = null
+        dateToFilter = null
+        categoryFilters = emptyList()
     }
 }
