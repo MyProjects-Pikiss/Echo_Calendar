@@ -102,3 +102,17 @@ Use a stable structure so app logs can distinguish failures:
 ```
 
 > Client behavior: if server call fails, app falls back to local rule-based parsing.
+
+
+## Contract test stub
+
+A local contract stub server is available at `tools/ai_contract_server.py`.
+It implements the same paths and validates the basic request shape so Android E2E wiring can be tested before backend deployment.
+
+Run:
+
+```bash
+python tools/ai_contract_server.py
+```
+
+Then configure app debug base URL to `http://10.0.2.2:8088` (emulator).

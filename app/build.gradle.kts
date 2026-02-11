@@ -12,6 +12,16 @@ fun Project.stringProperty(name: String, defaultValue: String = ""): String {
     return if (value.isNullOrEmpty()) defaultValue else value
 }
 
+fun Project.booleanProperty(name: String, defaultValue: Boolean): Boolean {
+    val rawValue = findProperty(name)?.toString()?.trim()?.lowercase()
+    return when (rawValue) {
+        "true", "1", "yes", "y", "on" -> true
+        "false", "0", "no", "n", "off" -> false
+        null, "" -> defaultValue
+        else -> defaultValue
+    }
+}
+
 fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
@@ -41,6 +51,16 @@ android {
                 "AI_API_KEY",
                 project.stringProperty("AI_API_KEY_DEBUG", project.stringProperty("AI_API_KEY")).asBuildConfigString()
             )
+            buildConfigField(
+                "boolean",
+                "AI_SEND_CLIENT_API_KEY",
+                project.booleanProperty("AI_SEND_CLIENT_API_KEY_DEBUG", true).toString()
+            )
+            buildConfigField(
+                "boolean",
+                "AI_REQUIRE_HTTPS",
+                project.booleanProperty("AI_REQUIRE_HTTPS_DEBUG", false).toString()
+            )
         }
         release {
             isMinifyEnabled = false
@@ -53,6 +73,16 @@ android {
                 "String",
                 "AI_API_KEY",
                 project.stringProperty("AI_API_KEY_RELEASE", project.stringProperty("AI_API_KEY")).asBuildConfigString()
+            )
+            buildConfigField(
+                "boolean",
+                "AI_SEND_CLIENT_API_KEY",
+                project.booleanProperty("AI_SEND_CLIENT_API_KEY_RELEASE", false).toString()
+            )
+            buildConfigField(
+                "boolean",
+                "AI_REQUIRE_HTTPS",
+                project.booleanProperty("AI_REQUIRE_HTTPS_RELEASE", true).toString()
             )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

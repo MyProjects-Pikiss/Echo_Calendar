@@ -4,6 +4,7 @@ import android.util.Log
 import com.echo.echocalendar.BuildConfig
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -89,7 +90,13 @@ class HttpAiApiGateway : AiApiGateway {
             Log.i("HttpAiApiGateway", "AI_API_BASE_URL is empty. Falling back to local interpreter.")
             throw IllegalStateException("AI API base URL is not configured")
         }
-        val url = URL(baseUrl + path)
+        val uri = runCatching { URI(baseUrl + path) }.getOrElse {
+            throw IllegalStateException("AI API URL is invalid: ${it.message}")
+        }
+        if (BuildConfig.AI_REQUIRE_HTTPS && !uri.scheme.equals("https", ignoreCase = true)) {
+            throw IllegalStateException("AI API base URL must use https in this build type")
+        }
+        val url = URL(uri.toString())
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = BuildConfig.AI_API_TIMEOUT_MS
@@ -98,8 +105,10 @@ class HttpAiApiGateway : AiApiGateway {
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             val apiKey = BuildConfig.AI_API_KEY.trim()
-            if (apiKey.isNotBlank()) {
+            if (BuildConfig.AI_SEND_CLIENT_API_KEY && apiKey.isNotBlank()) {
                 setRequestProperty("Authorization", "Bearer $apiKey")
+            } else if (!BuildConfig.AI_SEND_CLIENT_API_KEY && apiKey.isNotBlank()) {
+                Log.i("HttpAiApiGateway", "Client API key is configured but disabled for this build type.")
             }
         }
         return@withContext try {
