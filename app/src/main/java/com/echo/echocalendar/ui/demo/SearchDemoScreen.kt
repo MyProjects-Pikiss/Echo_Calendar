@@ -3,6 +3,8 @@ package com.echo.echocalendar.ui.demo
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -22,10 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchDemoScreen(
     searchViewModel: SearchViewModel,
@@ -56,6 +61,53 @@ fun SearchDemoScreen(
                 Text("검색")
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.dateFromFilter.orEmpty(),
+            onValueChange = searchViewModel::onDateFromFilterChange,
+            label = { Text("시작일 필터 (yyyy-MM-dd)") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.dateToFilter.orEmpty(),
+            onValueChange = searchViewModel::onDateToFilterChange,
+            label = { Text("종료일 필터 (yyyy-MM-dd)") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "카테고리 필터",
+            style = MaterialTheme.typography.labelLarge
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CategoryDefaults.categories.forEach { category ->
+                FilterChip(
+                    selected = category.id in searchViewModel.categoryFilters,
+                    onClick = { searchViewModel.toggleCategoryFilter(category.id) },
+                    label = { Text(category.displayName) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = searchViewModel::onSearchSubmit) {
+                Text("필터 적용")
+            }
+            Button(onClick = searchViewModel::clearFilters) {
+                Text("필터 초기화")
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         if (searchViewModel.isLoading) {
             CircularProgressIndicator(modifier = Modifier.width(24.dp))
@@ -65,6 +117,27 @@ fun SearchDemoScreen(
                 text = errorMessage,
                 color = MaterialTheme.colorScheme.error
             )
+        }
+        val filterSummary = buildList {
+            searchViewModel.dateFromFilter?.let { add("시작일: $it") }
+            searchViewModel.dateToFilter?.let { add("종료일: $it") }
+            if (searchViewModel.categoryFilters.isNotEmpty()) {
+                val labels = searchViewModel.categoryFilters.map { filter ->
+                    CategoryDefaults.categories.firstOrNull { it.id == filter }?.displayName ?: filter
+                }
+                add("카테고리: ${labels.joinToString(", ")}")
+            }
+        }
+        if (filterSummary.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "AI/사용자 필터 적용됨",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            filterSummary.forEach { summary ->
+                Text(text = "• $summary", style = MaterialTheme.typography.bodySmall)
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(

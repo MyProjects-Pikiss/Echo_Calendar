@@ -12,6 +12,9 @@ import com.echo.echocalendar.domain.usecase.GetLabelsForEventUseCase
 import com.echo.echocalendar.domain.usecase.SaveEventUseCase
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
 import com.echo.echocalendar.domain.usecase.UpdateEventUseCase
+import com.echo.echocalendar.ui.demo.AiApiGateway
+import com.echo.echocalendar.ui.demo.AiAssistantService
+import com.echo.echocalendar.ui.demo.HttpAiApiGateway
 
 class AppContainer(context: Context) {
     val database: AppDatabase = Room.databaseBuilder(
@@ -29,4 +32,7 @@ class AppContainer(context: Context) {
     val searchEventsUseCase: SearchEventsUseCase = SearchEventsUseCase(database)
     val getEventsByDateUseCase: GetEventsByDateUseCase = GetEventsByDateUseCase(database)
     val getEventsByMonthUseCase: GetEventsByMonthUseCase = GetEventsByMonthUseCase(database)
+
+    val aiApiGateway: AiApiGateway = HttpAiApiGateway()
+    val aiAssistantService: AiAssistantService = AiAssistantService(aiApiGateway)
 }
