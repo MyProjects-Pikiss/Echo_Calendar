@@ -57,3 +57,14 @@ AI_SEND_CLIENT_API_KEY_DEBUG=false
 
 If Gradle fails with `IllegalArgumentException: 25.0.1`, your Gradle daemon is running on JDK 25.
 Until the toolchain stack fully supports it, set Gradle JDK to 17 or 21.
+
+
+## 5) Backend contract quick check
+
+After starting backend (or local stub), run:
+
+```bash
+python tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
+```
+
+This validates required keys/mode values for all 3 endpoints.
