@@ -1,5 +1,6 @@
 package com.echo.echocalendar.ui.demo
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,14 +20,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -40,6 +43,20 @@ fun SearchDemoScreen(
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+    val context = LocalContext.current
+
+    fun showDatePicker(current: String?, onPicked: (String) -> Unit) {
+        val initialDate = runCatching { LocalDate.parse(current) }.getOrNull() ?: LocalDate.now(zoneId)
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                onPicked(LocalDate.of(year, month + 1, dayOfMonth).format(dateFormatter))
+            },
+            initialDate.year,
+            initialDate.monthValue - 1,
+            initialDate.dayOfMonth
+        ).show()
+    }
 
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
@@ -51,7 +68,7 @@ fun SearchDemoScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedTextField(
+            androidx.compose.material3.OutlinedTextField(
                 modifier = Modifier.weight(1f),
                 value = searchViewModel.query,
                 onValueChange = searchViewModel::onQueryChange,
@@ -63,21 +80,30 @@ fun SearchDemoScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
-            value = searchViewModel.dateFromFilter.orEmpty(),
-            onValueChange = searchViewModel::onDateFromFilterChange,
-            label = { Text("시작일 필터 (yyyy-MM-dd)") },
-            singleLine = true
-        )
+        Text(text = "날짜 필터", style = MaterialTheme.typography.labelLarge)
         Spacer(modifier = Modifier.height(6.dp))
-        OutlinedTextField(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            value = searchViewModel.dateToFilter.orEmpty(),
-            onValueChange = searchViewModel::onDateToFilterChange,
-            label = { Text("종료일 필터 (yyyy-MM-dd)") },
-            singleLine = true
-        )
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    showDatePicker(searchViewModel.dateFromFilter, searchViewModel::onDateFromFilterChange)
+                }
+            ) {
+                Text(searchViewModel.dateFromFilter ?: "시작일 선택")
+            }
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    showDatePicker(searchViewModel.dateToFilter, searchViewModel::onDateToFilterChange)
+                }
+            ) {
+                Text(searchViewModel.dateToFilter ?: "종료일 선택")
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "카테고리 필터",
