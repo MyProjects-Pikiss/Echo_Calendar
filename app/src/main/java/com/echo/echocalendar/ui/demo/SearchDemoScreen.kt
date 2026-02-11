@@ -56,6 +56,41 @@ fun SearchDemoScreen(
                 Text("검색")
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.dateFromFilter.orEmpty(),
+            onValueChange = searchViewModel::onDateFromFilterChange,
+            label = { Text("시작일 필터 (yyyy-MM-dd)") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.dateToFilter.orEmpty(),
+            onValueChange = searchViewModel::onDateToFilterChange,
+            label = { Text("종료일 필터 (yyyy-MM-dd)") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.categoryFilters.joinToString(", "),
+            onValueChange = searchViewModel::onCategoryFiltersChange,
+            label = { Text("카테고리 필터 (쉼표 구분)") },
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = searchViewModel::onSearchSubmit) {
+                Text("필터 적용")
+            }
+            Button(onClick = searchViewModel::clearFilters) {
+                Text("필터 초기화")
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         if (searchViewModel.isLoading) {
             CircularProgressIndicator(modifier = Modifier.width(24.dp))
@@ -65,6 +100,24 @@ fun SearchDemoScreen(
                 text = errorMessage,
                 color = MaterialTheme.colorScheme.error
             )
+        }
+        val filterSummary = buildList {
+            searchViewModel.dateFromFilter?.let { add("시작일: $it") }
+            searchViewModel.dateToFilter?.let { add("종료일: $it") }
+            if (searchViewModel.categoryFilters.isNotEmpty()) {
+                add("카테고리: ${searchViewModel.categoryFilters.joinToString(", ")}")
+            }
+        }
+        if (filterSummary.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "AI/사용자 필터 적용됨",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            filterSummary.forEach { summary ->
+                Text(text = "• $summary", style = MaterialTheme.typography.bodySmall)
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
