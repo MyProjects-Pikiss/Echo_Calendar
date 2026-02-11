@@ -28,6 +28,8 @@ class SearchViewModel(
         private set
     var categoryFilters by mutableStateOf<List<String>>(emptyList())
         private set
+    var aiFiltersApplied by mutableStateOf(false)
+        private set
 
     fun onQueryChange(newQuery: String) {
         query = newQuery
@@ -71,15 +73,28 @@ class SearchViewModel(
         categoryFilters = suggestion.categoryIds
             .map { it.trim() }
             .filter { it.isNotBlank() }
+        aiFiltersApplied = dateFromFilter != null || dateToFilter != null || categoryFilters.isNotEmpty()
         onSearchSubmit()
     }
 
     fun onDateFromFilterChange(value: String) {
         dateFromFilter = value.trim().ifBlank { null }
+        aiFiltersApplied = false
+    }
+
+    fun clearDateFromFilter() {
+        dateFromFilter = null
+        aiFiltersApplied = false
     }
 
     fun onDateToFilterChange(value: String) {
         dateToFilter = value.trim().ifBlank { null }
+        aiFiltersApplied = false
+    }
+
+    fun clearDateToFilter() {
+        dateToFilter = null
+        aiFiltersApplied = false
     }
 
     fun onCategoryFiltersChange(rawValue: String) {
@@ -87,6 +102,7 @@ class SearchViewModel(
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+        aiFiltersApplied = false
     }
 
     fun toggleCategoryFilter(categoryId: String) {
@@ -97,12 +113,21 @@ class SearchViewModel(
         } else {
             categoryFilters + id
         }
+        aiFiltersApplied = false
+    }
+
+    fun removeCategoryFilter(categoryId: String) {
+        val id = categoryId.trim()
+        if (id.isBlank()) return
+        categoryFilters = categoryFilters - id
+        aiFiltersApplied = false
     }
 
     fun clearFilters() {
         dateFromFilter = null
         dateToFilter = null
         categoryFilters = emptyList()
+        aiFiltersApplied = false
         if (query.isNotBlank()) {
             onSearchSubmit()
         }
@@ -116,6 +141,7 @@ class SearchViewModel(
         dateFromFilter = null
         dateToFilter = null
         categoryFilters = emptyList()
+        aiFiltersApplied = false
     }
 
     private fun validateFilters(dateFrom: String?, dateTo: String?): String? {

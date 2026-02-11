@@ -144,25 +144,50 @@ fun SearchDemoScreen(
                 color = MaterialTheme.colorScheme.error
             )
         }
-        val filterSummary = buildList {
-            searchViewModel.dateFromFilter?.let { add("시작일: $it") }
-            searchViewModel.dateToFilter?.let { add("종료일: $it") }
-            if (searchViewModel.categoryFilters.isNotEmpty()) {
-                val labels = searchViewModel.categoryFilters.map { filter ->
-                    CategoryDefaults.categories.firstOrNull { it.id == filter }?.displayName ?: filter
-                }
-                add("카테고리: ${labels.joinToString(", ")}")
-            }
-        }
-        if (filterSummary.isNotEmpty()) {
+        val hasFilters = searchViewModel.dateFromFilter != null ||
+            searchViewModel.dateToFilter != null ||
+            searchViewModel.categoryFilters.isNotEmpty()
+        if (hasFilters) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "AI/사용자 필터 적용됨",
+                text = if (searchViewModel.aiFiltersApplied) {
+                    "AI 필터 적용됨 (수정하려면 칩을 눌러 제거)"
+                } else {
+                    "사용자 필터 적용됨"
+                },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
-            filterSummary.forEach { summary ->
-                Text(text = "• $summary", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(6.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                searchViewModel.dateFromFilter?.let { from ->
+                    FilterChip(
+                        selected = true,
+                        onClick = searchViewModel::clearDateFromFilter,
+                        label = { Text("시작일: $from ✕") }
+                    )
+                }
+                searchViewModel.dateToFilter?.let { to ->
+                    FilterChip(
+                        selected = true,
+                        onClick = searchViewModel::clearDateToFilter,
+                        label = { Text("종료일: $to ✕") }
+                    )
+                }
+                searchViewModel.categoryFilters.forEach { filter ->
+                    val label = CategoryDefaults.categories
+                        .firstOrNull { it.id == filter }
+                        ?.displayName ?: filter
+                    FilterChip(
+                        selected = true,
+                        onClick = { searchViewModel.removeCategoryFilter(filter) },
+                        label = { Text("카테고리: $label ✕") }
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
