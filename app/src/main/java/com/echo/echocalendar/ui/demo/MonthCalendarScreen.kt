@@ -113,6 +113,7 @@ fun MonthCalendarScreen(
     var isSearchOpen by remember { mutableStateOf(false) }
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
+    var aiStatusMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val aiAssistantService = remember { AiAssistantService(HttpAiApiGateway()) }
 
@@ -134,10 +135,14 @@ fun MonthCalendarScreen(
         when (val action = pendingAiAction) {
             is AiAction.Input -> {
                 coroutineScope.launch {
-                    val suggestion = aiAssistantService.suggestInput(
+                    val result = aiAssistantService.suggestInput(
                         transcript = transcript,
                         selectedDate = calendarViewModel.selectedDate
                     )
+                    val suggestion = result.suggestion
+                    if (result.source == AiSuggestionSource.LocalFallback) {
+                        aiStatusMessage = "AI 서버 응답을 받지 못해 로컬 보완 규칙으로 처리했어요."
+                    }
                     pendingEdit = PendingEdit(
                         action = CrudAction.Create,
                         eventId = null,
@@ -159,10 +164,14 @@ fun MonthCalendarScreen(
             }
             is AiAction.Search -> {
                 coroutineScope.launch {
-                    val suggestion = aiAssistantService.suggestSearch(transcript)
+                    val result = aiAssistantService.suggestSearch(transcript)
+                    val suggestion = result.suggestion
                     if (suggestion.query.isBlank()) {
                         aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
                         return@launch
+                    }
+                    if (result.source == AiSuggestionSource.LocalFallback) {
+                        aiStatusMessage = "AI 서버 응답 실패로 로컬 규칙 검색을 적용했어요."
                     }
                     searchViewModel.applyAiSearchSuggestion(suggestion)
                     isSearchOpen = true
@@ -175,16 +184,23 @@ fun MonthCalendarScreen(
                 } else {
                     val currentValue = valueOfField(editState.draft, action.field)
                     coroutineScope.launch {
-                        val refined = aiAssistantService.refineField(
+                        val result = aiAssistantService.refineField(
                             transcript = transcript,
                             field = action.field,
                             currentValue = currentValue,
                             selectedDate = editState.date
                         )
+                        val refined = result.suggestion
                         pendingEdit = editState.copy(draft = applyFieldValue(editState.draft, refined.field, refined.value))
                         editError = refined.missingRequired
                             .takeIf { it.isNotEmpty() }
                             ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
+                        aiStatusMessage = if (result.source == AiSuggestionSource.Remote) {
+                            "AI 서버가 ${fieldLabel(action.field)} 항목 보완을 완료했어요."
+                        } else {
+                            val reason = result.fallbackReason?.takeIf { it.isNotBlank() }?.let { " (사유: $it)" }.orEmpty()
+                            "AI 서버 보완에 실패해 로컬 규칙으로 반영했어요.$reason"
+                        }
                     }
                 }
             }
@@ -574,6 +590,19 @@ fun MonthCalendarScreen(
                 }
             },
             title = { Text(text = "AI 처리 안내") },
+            text = { Text(text = message) }
+        )
+    }
+
+    aiStatusMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { aiStatusMessage = null },
+            confirmButton = {
+                TextButton(onClick = { aiStatusMessage = null }) {
+                    Text(text = "확인")
+                }
+            },
+            title = { Text(text = "AI 처리 결과") },
             text = { Text(text = message) }
         )
     }
@@ -1082,6 +1111,15 @@ private fun applyFieldValue(draft: EventDraft, field: DraftField, value: String)
     DraftField.Place -> draft.copy(placeText = value)
     DraftField.Labels -> draft.copy(labelsText = value)
     DraftField.Body -> draft.copy(body = value)
+}
+
+private fun fieldLabel(field: DraftField): String = when (field) {
+    DraftField.Summary -> "제목"
+    DraftField.Time -> "시간"
+    DraftField.Category -> "카테고리"
+    DraftField.Place -> "장소"
+    DraftField.Labels -> "라벨"
+    DraftField.Body -> "내용"
 }
 
 private val fixedHolidays = mapOf(

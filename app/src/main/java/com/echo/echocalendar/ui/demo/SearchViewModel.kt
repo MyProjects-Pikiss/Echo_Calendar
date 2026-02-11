@@ -67,6 +67,27 @@ class SearchViewModel(
         onSearchSubmit()
     }
 
+    fun onDateFromFilterChange(value: String) {
+        dateFromFilter = value.trim().ifBlank { null }
+    }
+
+    fun onDateToFilterChange(value: String) {
+        dateToFilter = value.trim().ifBlank { null }
+    }
+
+    fun onCategoryFiltersChange(rawValue: String) {
+        categoryFilters = rawValue
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+    }
+
+    fun clearFilters() {
+        dateFromFilter = null
+        dateToFilter = null
+        categoryFilters = emptyList()
+    }
+
     fun resetSearch() {
         query = ""
         results = emptyList()

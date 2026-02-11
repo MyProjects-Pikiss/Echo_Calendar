@@ -1,7 +1,7 @@
 package com.echo.echocalendar.ui.demo
 
+import android.util.Log
 import com.echo.echocalendar.BuildConfig
-import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -86,7 +86,8 @@ class HttpAiApiGateway : AiApiGateway {
     private suspend fun postJson(path: String, body: JSONObject): JSONObject? = withContext(Dispatchers.IO) {
         val baseUrl = BuildConfig.AI_API_BASE_URL.trim().trimEnd('/')
         if (baseUrl.isBlank()) {
-            return@withContext null
+            Log.i("HttpAiApiGateway", "AI_API_BASE_URL is empty. Falling back to local interpreter.")
+            throw IllegalStateException("AI API base URL is not configured")
         }
         val url = URL(baseUrl + path)
         val connection = (url.openConnection() as HttpURLConnection).apply {
@@ -101,18 +102,25 @@ class HttpAiApiGateway : AiApiGateway {
                 setRequestProperty("Authorization", "Bearer $apiKey")
             }
         }
-        return@withContext runCatching {
+        return@withContext try {
             OutputStreamWriter(connection.outputStream).use { writer ->
                 writer.write(body.toString())
             }
-            val stream = if (connection.responseCode in 200..299) {
+            val responseCode = connection.responseCode
+            val stream = if (responseCode in 200..299) {
                 connection.inputStream
             } else {
-                connection.errorStream ?: return@runCatching null
+                connection.errorStream
             }
-            val responseText = BufferedReader(stream.reader()).use { it.readText() }
-            if (responseText.isBlank()) null else JSONObject(responseText)
-        }.getOrNull().also {
+            val responseText = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (responseCode !in 200..299) {
+                throw IllegalStateException("AI API request failed ($responseCode): ${responseText.take(200)}")
+            }
+            if (responseText.isBlank()) {
+                throw IllegalStateException("AI API returned empty body")
+            }
+            JSONObject(responseText)
+        } finally {
             connection.disconnect()
         }
     }
