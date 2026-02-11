@@ -92,6 +92,7 @@ import kotlinx.coroutines.launch
 fun MonthCalendarScreen(
     calendarViewModel: CalendarViewModel,
     searchViewModel: SearchViewModel,
+    aiAssistantService: AiAssistantService,
     isOnline: Boolean
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
@@ -115,7 +116,6 @@ fun MonthCalendarScreen(
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
     var aiStatusMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
-    val aiAssistantService = remember { AiAssistantService(HttpAiApiGateway()) }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -473,22 +473,32 @@ fun MonthCalendarScreen(
                             targetOffsetY = { it / 4 }
                         )
                     ) {
-                        ActionPickerRow(
-                            firstLabel = "AI 입력",
-                            firstIcon = Icons.Default.Mic,
-                            secondLabel = "AI 검색",
-                            secondIcon = Icons.Default.Search,
-                            onFirstActionSelected = {
-                                isActionPickerOpen = false
-                                pendingAiAction = AiAction.Input
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            },
-                            onSecondActionSelected = {
-                                isActionPickerOpen = false
-                                pendingAiAction = AiAction.Search
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        Column {
+                            ActionPickerRow(
+                                firstLabel = "AI 입력",
+                                firstIcon = Icons.Default.Mic,
+                                secondLabel = "AI 검색",
+                                secondIcon = Icons.Default.Search,
+                                onFirstActionSelected = {
+                                    isActionPickerOpen = false
+                                    pendingAiAction = AiAction.Input
+                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                },
+                                onSecondActionSelected = {
+                                    isActionPickerOpen = false
+                                    pendingAiAction = AiAction.Search
+                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            )
+                            if (!isOnline) {
+                                Text(
+                                    text = "오프라인 상태에서는 AI 입력/검색을 사용할 수 없어요.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -529,8 +539,12 @@ fun MonthCalendarScreen(
                 BottomBarButton(
                     icon = Icons.Default.Mic,
                     label = "마이크",
-                    enabled = isOnline,
+                    enabled = true,
                     onClick = {
+                        if (!isOnline) {
+                            aiErrorMessage = "오프라인 상태에서는 AI 마이크 기능을 사용할 수 없어요."
+                            return@BottomBarButton
+                        }
                         if (activeTrigger == InputTrigger.Microphone) {
                             isActionPickerOpen = !isActionPickerOpen
                         } else {
