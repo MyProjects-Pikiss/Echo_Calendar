@@ -125,9 +125,15 @@ fun SearchDemoScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "필터를 변경하면 검색어가 있을 때 자동으로 재검색됩니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = searchViewModel::onSearchSubmit) {
-                Text("필터 적용")
+                Text("지금 검색")
             }
             Button(onClick = searchViewModel::clearFilters) {
                 Text("필터 초기화")

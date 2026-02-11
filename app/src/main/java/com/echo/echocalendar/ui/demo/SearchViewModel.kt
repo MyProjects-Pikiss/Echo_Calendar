@@ -80,21 +80,25 @@ class SearchViewModel(
     fun onDateFromFilterChange(value: String) {
         dateFromFilter = value.trim().ifBlank { null }
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun clearDateFromFilter() {
         dateFromFilter = null
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun onDateToFilterChange(value: String) {
         dateToFilter = value.trim().ifBlank { null }
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun clearDateToFilter() {
         dateToFilter = null
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun onCategoryFiltersChange(rawValue: String) {
@@ -103,6 +107,7 @@ class SearchViewModel(
             .map { it.trim() }
             .filter { it.isNotBlank() }
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun toggleCategoryFilter(categoryId: String) {
@@ -114,6 +119,7 @@ class SearchViewModel(
             categoryFilters + id
         }
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun removeCategoryFilter(categoryId: String) {
@@ -121,6 +127,7 @@ class SearchViewModel(
         if (id.isBlank()) return
         categoryFilters = categoryFilters - id
         aiFiltersApplied = false
+        refreshAfterFilterMutation()
     }
 
     fun clearFilters() {
@@ -128,9 +135,7 @@ class SearchViewModel(
         dateToFilter = null
         categoryFilters = emptyList()
         aiFiltersApplied = false
-        if (query.isNotBlank()) {
-            onSearchSubmit()
-        }
+        refreshAfterFilterMutation()
     }
 
     fun resetSearch() {
@@ -144,8 +149,14 @@ class SearchViewModel(
         aiFiltersApplied = false
     }
 
-    private fun validateFilters(dateFrom: String?, dateTo: String?): String? {
-        val parsedFrom = when {
+
+    private fun refreshAfterFilterMutation() {
+        if (query.isNotBlank()) {
+            onSearchSubmit()
+        }
+    }
+
+    private fun validateFilters(dateFrom: String?, dateTo: String?): String? {        val parsedFrom = when {
             dateFrom.isNullOrBlank() -> null
             else -> parseDate(dateFrom) ?: return "시작일 형식은 yyyy-MM-dd 입니다."
         }
