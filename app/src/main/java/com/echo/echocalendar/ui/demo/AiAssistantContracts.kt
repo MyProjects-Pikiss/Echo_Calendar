@@ -1,0 +1,42 @@
+package com.echo.echocalendar.ui.demo
+
+import java.time.LocalDate
+
+enum class AiMode(val value: String) {
+    Input("input"),
+    Search("search"),
+    Refine("refine")
+}
+
+enum class DraftField(val value: String) {
+    Summary("summary"),
+    Time("time"),
+    Category("category"),
+    Place("place"),
+    Labels("labels"),
+    Body("body")
+}
+
+data class AiInputSuggestion(
+    val date: LocalDate,
+    val summary: String,
+    val timeText: String,
+    val categoryId: String,
+    val placeText: String,
+    val body: String,
+    val labelsText: String,
+    val missingRequired: List<String>
+)
+
+data class AiSearchSuggestion(
+    val query: String,
+    val dateFrom: String? = null,
+    val dateTo: String? = null,
+    val categoryIds: List<String> = emptyList()
+)
+
+data class AiRefineSuggestion(
+    val field: DraftField,
+    val value: String,
+    val missingRequired: List<String>
+)
