@@ -1,10 +1,12 @@
 package com.echo.echocalendar.ui.demo
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.SpeechRecognizer
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntOffsetAsState
@@ -57,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -68,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,20 +122,16 @@ fun MonthCalendarScreen(
     var lastTranscript by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    val speechRecognizerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            pendingAiAction = null
-            return@rememberLauncherForActivityResult
-        }
-        val matches = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            .orEmpty()
-        val transcript = matches.firstOrNull()?.trim().orEmpty()
+    val context = LocalContext.current
+    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    var isListening by remember { mutableStateOf(false) }
+    var partialTranscript by remember { mutableStateOf("") }
+
+    fun handleRecognizedTranscript(transcript: String) {
         if (transcript.isBlank()) {
             aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
-            return@rememberLauncherForActivityResult
+            pendingAiAction = null
+            return
         }
         lastTranscript = transcript
         when (val action = pendingAiAction) {
@@ -211,6 +211,79 @@ fun MonthCalendarScreen(
         pendingAiAction = null
     }
 
+    fun startVoiceRecognition() {
+        if (pendingAiAction == null) return
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            aiErrorMessage = "이 기기에서는 음성 인식을 사용할 수 없어요."
+            pendingAiAction = null
+            return
+        }
+        partialTranscript = ""
+        aiErrorMessage = null
+        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+        speechRecognizer?.startListening(speechIntent)
+        isListening = true
+    }
+
+    fun stopVoiceRecognition() {
+        if (!isListening) return
+        speechRecognizer?.stopListening()
+        isListening = false
+    }
+
+    DisposableEffect(context) {
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+            setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) = Unit
+                override fun onBeginningOfSpeech() = Unit
+                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBufferReceived(buffer: ByteArray?) = Unit
+                override fun onEndOfSpeech() = Unit
+
+                override fun onError(error: Int) {
+                    isListening = false
+                    partialTranscript = ""
+                    if (error == SpeechRecognizer.ERROR_CLIENT) {
+                        pendingAiAction = null
+                        return
+                    }
+                    aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
+                    pendingAiAction = null
+                }
+
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    val transcript = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        ?.trim()
+                        .orEmpty()
+                    partialTranscript = ""
+                    handleRecognizedTranscript(transcript)
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    partialTranscript = partialResults
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        ?.trim()
+                        .orEmpty()
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) = Unit
+            })
+        }
+        speechRecognizer = recognizer
+        onDispose {
+            recognizer.destroy()
+            speechRecognizer = null
+        }
+    }
+
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -219,12 +292,19 @@ fun MonthCalendarScreen(
             pendingAiAction = null
             return@rememberLauncherForActivityResult
         }
-        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN.toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "말씀하신 내용을 AI 입력/검색으로 처리할게요")
+        startVoiceRecognition()
+    }
+
+    fun triggerVoiceAction(action: AiAction) {
+        if (isListening && pendingAiAction == action) {
+            stopVoiceRecognition()
+            return
         }
-        speechRecognizerLauncher.launch(speechIntent)
+        if (isListening) {
+            stopVoiceRecognition()
+        }
+        pendingAiAction = action
+        recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
@@ -476,9 +556,23 @@ fun MonthCalendarScreen(
                         )
                     ) {
                         Column {
-                            lastTranscript?.let { transcript ->
+                            if (isListening) {
+                                val actionLabel = when (pendingAiAction) {
+                                    is AiAction.Input -> "AI 입력"
+                                    is AiAction.Search -> "AI 검색"
+                                    is AiAction.RefineField -> "필드 보완"
+                                    null -> "음성 인식"
+                                }
                                 Text(
-                                    text = "인식된 음성: $transcript",
+                                    text = "$actionLabel 듣는 중... 같은 버튼을 다시 누르면 종료돼요.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                            val transcriptPreview = partialTranscript.ifBlank { lastTranscript.orEmpty() }
+                            if (transcriptPreview.isNotBlank()) {
+                                Text(
+                                    text = "인식된 음성: $transcriptPreview",
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                                 )
@@ -489,14 +583,10 @@ fun MonthCalendarScreen(
                                 secondLabel = "AI 검색",
                                 secondIcon = Icons.Default.Search,
                                 onFirstActionSelected = {
-                                    isActionPickerOpen = false
-                                    pendingAiAction = AiAction.Input
-                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    triggerVoiceAction(AiAction.Input)
                                 },
                                 onSecondActionSelected = {
-                                    isActionPickerOpen = false
-                                    pendingAiAction = AiAction.Search
-                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    triggerVoiceAction(AiAction.Search)
                                 }
                             )
                             if (!isOnline) {
@@ -715,8 +805,7 @@ fun MonthCalendarScreen(
                         label = { Text(text = "제목") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                pendingAiAction = AiAction.RefineField(DraftField.Summary)
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                triggerVoiceAction(AiAction.RefineField(DraftField.Summary))
                             }) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "제목 음성 보완")
                             }
@@ -734,8 +823,7 @@ fun MonthCalendarScreen(
                         label = { Text(text = "시간 (HH:mm)") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                pendingAiAction = AiAction.RefineField(DraftField.Time)
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                triggerVoiceAction(AiAction.RefineField(DraftField.Time))
                             }) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "시간 음성 보완")
                             }
@@ -750,8 +838,7 @@ fun MonthCalendarScreen(
                             Text(text = "카테고리: $label")
                         }
                         IconButton(onClick = {
-                            pendingAiAction = AiAction.RefineField(DraftField.Category)
-                            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            triggerVoiceAction(AiAction.RefineField(DraftField.Category))
                         }) {
                             Icon(imageVector = Icons.Default.Mic, contentDescription = "카테고리 음성 보완")
                         }
@@ -784,8 +871,7 @@ fun MonthCalendarScreen(
                         label = { Text(text = "장소") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                pendingAiAction = AiAction.RefineField(DraftField.Place)
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                triggerVoiceAction(AiAction.RefineField(DraftField.Place))
                             }) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "장소 음성 보완")
                             }
@@ -803,8 +889,7 @@ fun MonthCalendarScreen(
                         label = { Text(text = "라벨 (쉼표로 구분)") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                pendingAiAction = AiAction.RefineField(DraftField.Labels)
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                triggerVoiceAction(AiAction.RefineField(DraftField.Labels))
                             }) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "라벨 음성 보완")
                             }
@@ -822,8 +907,7 @@ fun MonthCalendarScreen(
                         label = { Text(text = "내용") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                pendingAiAction = AiAction.RefineField(DraftField.Body)
-                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                triggerVoiceAction(AiAction.RefineField(DraftField.Body))
                             }) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "내용 음성 보완")
                             }
