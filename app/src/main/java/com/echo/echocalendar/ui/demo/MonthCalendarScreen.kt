@@ -115,13 +115,14 @@ fun MonthCalendarScreen(
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
     var aiStatusMessage by remember { mutableStateOf<String?>(null) }
+    var lastTranscript by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode != Activity.RESULT_OK) {
-            aiErrorMessage = "음성 인식이 취소되었어요."
+            pendingAiAction = null
             return@rememberLauncherForActivityResult
         }
         val matches = result.data
@@ -132,6 +133,7 @@ fun MonthCalendarScreen(
             aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
             return@rememberLauncherForActivityResult
         }
+        lastTranscript = transcript
         when (val action = pendingAiAction) {
             is AiAction.Input -> {
                 coroutineScope.launch {
@@ -474,6 +476,13 @@ fun MonthCalendarScreen(
                         )
                     ) {
                         Column {
+                            lastTranscript?.let { transcript ->
+                                Text(
+                                    text = "인식된 음성: $transcript",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
                             ActionPickerRow(
                                 firstLabel = "AI 입력",
                                 firstIcon = Icons.Default.Mic,
