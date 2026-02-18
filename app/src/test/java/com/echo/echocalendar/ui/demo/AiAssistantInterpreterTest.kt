@@ -53,6 +53,6 @@ class AiAssistantInterpreterTest {
         )
 
         val suggestion = service.suggestSearch("회의 검색")
-        assertEquals("회의", suggestion.query)
+        assertEquals("회의", suggestion.suggestion.query)
     }
 }

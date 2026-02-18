@@ -86,11 +86,15 @@ class AiAssistantService(
     }
 
     private fun logRemoteSuccess(action: String) {
-        Log.i(TAG, "remote_success action=$action")
+        safeLog { Log.i(TAG, "remote_success action=$action") }
     }
 
     private fun logRemoteFailure(action: String, reason: String) {
-        Log.w(TAG, "remote_failure_fallback action=$action reason=$reason")
+        safeLog { Log.w(TAG, "remote_failure_fallback action=$action reason=$reason") }
+    }
+
+    private inline fun safeLog(block: () -> Unit) {
+        runCatching(block)
     }
 
     private fun normalizeFallbackReason(error: Throwable?): String {
