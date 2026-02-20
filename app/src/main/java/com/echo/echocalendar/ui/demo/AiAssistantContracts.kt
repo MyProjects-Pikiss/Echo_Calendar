@@ -17,8 +17,15 @@ enum class DraftField(val value: String) {
     Body("body")
 }
 
+enum class AiCrudIntent(val value: String) {
+    Create("create"),
+    Update("update"),
+    Delete("delete")
+}
+
 data class AiInputSuggestion(
     val date: LocalDate,
+    val intent: AiCrudIntent,
     val summary: String,
     val timeText: String,
     val categoryId: String,

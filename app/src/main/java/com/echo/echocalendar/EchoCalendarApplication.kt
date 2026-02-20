@@ -17,6 +17,9 @@ class EchoCalendarApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        applicationScope.launch {
+            DebugSeedData.ensureDefaultCategories(container.database)
+        }
         if (BuildConfig.DEBUG) {
             applicationScope.launch {
                 DebugSeedData.seedIfEmpty(container.database)

@@ -22,7 +22,6 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "echo_calendar.db"
     ).addMigrations(MIGRATION_3_4, MIGRATION_4_5)
-        .fallbackToDestructiveMigration()
         .build()
 
     val deleteEventUseCase: DeleteEventUseCase = DeleteEventUseCase(database)

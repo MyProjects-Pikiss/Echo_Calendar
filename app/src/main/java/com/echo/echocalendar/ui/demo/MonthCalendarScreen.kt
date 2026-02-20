@@ -145,23 +145,72 @@ fun MonthCalendarScreen(
                     if (result.source == AiSuggestionSource.LocalFallback) {
                         aiStatusMessage = "AI 서버 응답을 받지 못해 로컬 보완 규칙으로 처리했어요."
                     }
-                    pendingEdit = PendingEdit(
-                        action = CrudAction.Create,
-                        eventId = null,
-                        date = suggestion.date,
-                        draft = EventDraft(
-                            summary = suggestion.summary,
-                            timeText = suggestion.timeText,
-                            categoryId = suggestion.categoryId,
-                            placeText = suggestion.placeText,
-                            body = suggestion.body,
-                            labelsText = suggestion.labelsText
-                        )
+                    val suggestionDraft = EventDraft(
+                        summary = suggestion.summary,
+                        timeText = suggestion.timeText,
+                        categoryId = suggestion.categoryId,
+                        placeText = suggestion.placeText,
+                        body = suggestion.body,
+                        labelsText = suggestion.labelsText
                     )
-                    isCategoryMenuOpen = false
-                    editError = suggestion.missingRequired
-                        .takeIf { it.isNotEmpty() }
-                        ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
+                    val candidates = candidateEventsForDate(
+                        date = suggestion.date,
+                        selectedDate = calendarViewModel.selectedDate,
+                        eventsByDate = calendarViewModel.eventsByDate,
+                        eventsOfSelectedDate = calendarViewModel.eventsOfDay
+                    )
+
+                    when (suggestion.intent) {
+                        AiCrudIntent.Create -> {
+                            pendingEdit = PendingEdit(
+                                action = CrudAction.Create,
+                                eventId = null,
+                                date = suggestion.date,
+                                draft = suggestionDraft
+                            )
+                            isCategoryMenuOpen = false
+                            editError = suggestion.missingRequired
+                                .takeIf { it.isNotEmpty() }
+                                ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
+                        }
+                        AiCrudIntent.Update -> {
+                            val target = findBestTargetEvent(candidates, suggestion.summary, suggestion.body)
+                            if (target == null) {
+                                aiErrorMessage = "수정할 이벤트를 찾지 못했어요. 제목을 더 구체적으로 말해 주세요."
+                                return@launch
+                            }
+                            val dateTime = Instant.ofEpochMilli(target.occurredAt).atZone(zoneId).toLocalDateTime()
+                            val existingLabels = calendarViewModel.labelsByEventId[target.id].orEmpty()
+                            pendingEdit = PendingEdit(
+                                action = CrudAction.Update,
+                                eventId = target.id,
+                                date = dateTime.toLocalDate(),
+                                draft = mergeDraftForUpdate(
+                                    existing = EventDraft(
+                                        summary = target.summary,
+                                        timeText = timeFormatter.format(dateTime),
+                                        categoryId = target.categoryId,
+                                        placeText = target.placeText.orEmpty(),
+                                        body = target.body,
+                                        labelsText = existingLabels.joinToString(", ")
+                                    ),
+                                    suggestion = suggestionDraft
+                                )
+                            )
+                            isCategoryMenuOpen = false
+                            editError = null
+                            aiStatusMessage = "수정 후보를 찾았어요. 확인 후 반영해 주세요."
+                        }
+                        AiCrudIntent.Delete -> {
+                            val target = findBestTargetEvent(candidates, suggestion.summary, suggestion.body)
+                            if (target == null) {
+                                aiErrorMessage = "삭제할 이벤트를 찾지 못했어요. 제목을 더 구체적으로 말해 주세요."
+                                return@launch
+                            }
+                            pendingDelete = target
+                            aiStatusMessage = "삭제 후보를 찾았어요. 확인 후 삭제해 주세요."
+                        }
+                    }
                 }
             }
             is AiAction.Search -> {
@@ -296,6 +345,11 @@ fun MonthCalendarScreen(
     }
 
     fun triggerVoiceAction(action: AiAction) {
+        if (!isOnline) {
+            aiErrorMessage = "오프라인 상태에서는 AI 음성 기능을 사용할 수 없어요."
+            pendingAiAction = null
+            return
+        }
         if (isListening && pendingAiAction == action) {
             stopVoiceRecognition()
             return
@@ -638,12 +692,8 @@ fun MonthCalendarScreen(
                 BottomBarButton(
                     icon = Icons.Default.Mic,
                     label = "마이크",
-                    enabled = true,
+                    enabled = isOnline,
                     onClick = {
-                        if (!isOnline) {
-                            aiErrorMessage = "오프라인 상태에서는 AI 마이크 기능을 사용할 수 없어요."
-                            return@BottomBarButton
-                        }
                         if (activeTrigger == InputTrigger.Microphone) {
                             isActionPickerOpen = !isActionPickerOpen
                         } else {
@@ -804,9 +854,12 @@ fun MonthCalendarScreen(
                         },
                         label = { Text(text = "제목") },
                         trailingIcon = {
-                            IconButton(onClick = {
+                            IconButton(
+                                enabled = isOnline,
+                                onClick = {
                                 triggerVoiceAction(AiAction.RefineField(DraftField.Summary))
-                            }) {
+                                }
+                            ) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "제목 음성 보완")
                             }
                         },
@@ -822,9 +875,12 @@ fun MonthCalendarScreen(
                         },
                         label = { Text(text = "시간 (HH:mm)") },
                         trailingIcon = {
-                            IconButton(onClick = {
+                            IconButton(
+                                enabled = isOnline,
+                                onClick = {
                                 triggerVoiceAction(AiAction.RefineField(DraftField.Time))
-                            }) {
+                                }
+                            ) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "시간 음성 보완")
                             }
                         },
@@ -837,9 +893,12 @@ fun MonthCalendarScreen(
                             val label = selectedCategory?.displayName ?: editState.draft.categoryId
                             Text(text = "카테고리: $label")
                         }
-                        IconButton(onClick = {
+                        IconButton(
+                            enabled = isOnline,
+                            onClick = {
                             triggerVoiceAction(AiAction.RefineField(DraftField.Category))
-                        }) {
+                            }
+                        ) {
                             Icon(imageVector = Icons.Default.Mic, contentDescription = "카테고리 음성 보완")
                         }
                         DropdownMenu(
@@ -870,9 +929,12 @@ fun MonthCalendarScreen(
                         },
                         label = { Text(text = "장소") },
                         trailingIcon = {
-                            IconButton(onClick = {
+                            IconButton(
+                                enabled = isOnline,
+                                onClick = {
                                 triggerVoiceAction(AiAction.RefineField(DraftField.Place))
-                            }) {
+                                }
+                            ) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "장소 음성 보완")
                             }
                         },
@@ -888,9 +950,12 @@ fun MonthCalendarScreen(
                         },
                         label = { Text(text = "라벨 (쉼표로 구분)") },
                         trailingIcon = {
-                            IconButton(onClick = {
+                            IconButton(
+                                enabled = isOnline,
+                                onClick = {
                                 triggerVoiceAction(AiAction.RefineField(DraftField.Labels))
-                            }) {
+                                }
+                            ) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "라벨 음성 보완")
                             }
                         },
@@ -906,9 +971,12 @@ fun MonthCalendarScreen(
                         },
                         label = { Text(text = "내용") },
                         trailingIcon = {
-                            IconButton(onClick = {
+                            IconButton(
+                                enabled = isOnline,
+                                onClick = {
                                 triggerVoiceAction(AiAction.RefineField(DraftField.Body))
-                            }) {
+                                }
+                            ) {
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "내용 음성 보완")
                             }
                         }
@@ -1218,6 +1286,66 @@ private fun applyFieldValue(draft: EventDraft, field: DraftField, value: String)
     DraftField.Place -> draft.copy(placeText = value)
     DraftField.Labels -> draft.copy(labelsText = value)
     DraftField.Body -> draft.copy(body = value)
+}
+
+private fun candidateEventsForDate(
+    date: LocalDate,
+    selectedDate: LocalDate,
+    eventsByDate: Map<LocalDate, List<com.echo.echocalendar.data.local.EventEntity>>,
+    eventsOfSelectedDate: List<com.echo.echocalendar.data.local.EventEntity>
+): List<com.echo.echocalendar.data.local.EventEntity> {
+    return if (date == selectedDate) {
+        eventsOfSelectedDate
+    } else {
+        eventsByDate[date].orEmpty()
+    }
+}
+
+private fun mergeDraftForUpdate(existing: EventDraft, suggestion: EventDraft): EventDraft {
+    return existing.copy(
+        summary = suggestion.summary.trim().ifBlank { existing.summary },
+        timeText = suggestion.timeText.trim().ifBlank { existing.timeText },
+        categoryId = suggestion.categoryId.trim().ifBlank { existing.categoryId },
+        placeText = suggestion.placeText.trim().ifBlank { existing.placeText },
+        body = suggestion.body.trim().ifBlank { existing.body },
+        labelsText = suggestion.labelsText.trim().ifBlank { existing.labelsText }
+    )
+}
+
+private fun findBestTargetEvent(
+    candidates: List<com.echo.echocalendar.data.local.EventEntity>,
+    summaryHint: String,
+    bodyHint: String
+): com.echo.echocalendar.data.local.EventEntity? {
+    if (candidates.isEmpty()) return null
+    val summaryNorm = normalizeForMatch(summaryHint)
+    if (summaryNorm.isNotBlank()) {
+        val bySummary = candidates.firstOrNull { candidate ->
+            val target = normalizeForMatch(candidate.summary)
+            target.contains(summaryNorm) || summaryNorm.contains(target)
+        }
+        if (bySummary != null) return bySummary
+    }
+
+    val bodyTokens = normalizeForMatch(bodyHint)
+        .split(Regex("\\s+"))
+        .filter { it.length >= 2 }
+    if (bodyTokens.isNotEmpty()) {
+        val byBody = candidates.firstOrNull { candidate ->
+            val haystack = normalizeForMatch("${candidate.summary} ${candidate.body} ${candidate.placeText.orEmpty()}")
+            bodyTokens.any { token -> haystack.contains(token) }
+        }
+        if (byBody != null) return byBody
+    }
+    return null
+}
+
+private fun normalizeForMatch(source: String): String {
+    return source
+        .lowercase()
+        .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
 }
 
 private fun fieldLabel(field: DraftField): String = when (field) {
