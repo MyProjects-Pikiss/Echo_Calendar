@@ -5,7 +5,7 @@ import com.echo.echocalendar.data.local.AppDatabase
 import com.echo.echocalendar.data.local.CategoryDefaults
 
 object DebugSeedData {
-    suspend fun seedIfEmpty(database: AppDatabase) {
+    suspend fun ensureDefaultCategories(database: AppDatabase) {
         database.withTransaction {
             if (database.categoryDao().getAll().isEmpty()) {
                 CategoryDefaults.categories.forEach { category ->
@@ -13,6 +13,10 @@ object DebugSeedData {
                 }
             }
         }
+    }
+
+    suspend fun seedIfEmpty(database: AppDatabase) {
+        ensureDefaultCategories(database)
         val seededSummaries = listOf(
             "병원 방문",
             "프로젝트 회의",

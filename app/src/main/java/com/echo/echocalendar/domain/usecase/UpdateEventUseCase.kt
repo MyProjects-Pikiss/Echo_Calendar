@@ -34,6 +34,7 @@ class UpdateEventUseCase(
 
         database.withTransaction {
             database.eventDao().upsert(updatedEvent)
+            database.eventFtsDao().deleteByEventId(eventId)
             database.eventFtsDao().upsert(
                 EventFtsEntity(
                     eventId = eventId,

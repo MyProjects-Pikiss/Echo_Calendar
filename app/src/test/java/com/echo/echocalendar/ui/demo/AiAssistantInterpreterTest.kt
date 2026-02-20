@@ -14,8 +14,29 @@ class AiAssistantInterpreterTest {
             selectedDate = LocalDate.of(2026, 1, 1)
         )
 
+        assertEquals(AiCrudIntent.Create, suggestion.intent)
         assertEquals("09:30", suggestion.timeText)
         assertTrue(suggestion.body.contains("팀 미팅"))
+    }
+
+    @Test
+    fun suggestInput_detectsDeleteIntent() {
+        val suggestion = AiAssistantInterpreter.suggestInput(
+            transcript = "팀 미팅 삭제해줘",
+            selectedDate = LocalDate.of(2026, 1, 1)
+        )
+
+        assertEquals(AiCrudIntent.Delete, suggestion.intent)
+    }
+
+    @Test
+    fun suggestInput_detectsUpdateIntent() {
+        val suggestion = AiAssistantInterpreter.suggestInput(
+            transcript = "팀 미팅 시간 3시로 수정해줘",
+            selectedDate = LocalDate.of(2026, 1, 1)
+        )
+
+        assertEquals(AiCrudIntent.Update, suggestion.intent)
     }
 
     @Test

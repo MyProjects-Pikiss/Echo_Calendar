@@ -31,9 +31,13 @@ class HttpAiApiGateway : AiApiGateway {
             .put("selectedDate", selectedDate.toString())
         val json = postJson("/ai/input-interpret", request) ?: return null
         if (json.optString("mode") != AiMode.Input.value) return null
+        val intent = AiCrudIntent.entries.firstOrNull {
+            it.value == json.optString("intent", AiCrudIntent.Create.value).lowercase()
+        } ?: AiCrudIntent.Create
         val missingRequired = json.optJSONArray("missingRequired").toStringList()
         return AiInputSuggestion(
             date = LocalDate.parse(json.optString("date", selectedDate.toString())),
+            intent = intent,
             summary = json.optString("summary"),
             timeText = json.optString("time", ""),
             categoryId = json.optString("categoryId", ""),
@@ -54,8 +58,8 @@ class HttpAiApiGateway : AiApiGateway {
         if (query.isBlank()) return null
         return AiSearchSuggestion(
             query = query,
-            dateFrom = json.optString("dateFrom", null),
-            dateTo = json.optString("dateTo", null),
+            dateFrom = json.optNullableString("dateFrom"),
+            dateTo = json.optNullableString("dateTo"),
             categoryIds = json.optJSONArray("categoryIds").toStringList()
         )
     }
@@ -143,4 +147,9 @@ private fun JSONArray?.toStringList(): List<String> {
             if (value.isNotBlank()) add(value)
         }
     }
+}
+
+private fun JSONObject.optNullableString(key: String): String? {
+    if (!has(key) || isNull(key)) return null
+    return optString(key)
 }

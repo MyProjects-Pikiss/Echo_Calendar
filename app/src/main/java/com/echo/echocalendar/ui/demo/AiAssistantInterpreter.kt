@@ -6,6 +6,7 @@ import java.time.LocalDate
 object AiAssistantInterpreter {
     fun suggestInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion {
         val normalized = transcript.trim()
+        val intent = extractCrudIntent(normalized)
         val timeText = extractTimeText(normalized).orEmpty()
         val summary = extractSummary(normalized)
         val categoryId = extractCategoryId(normalized)
@@ -19,6 +20,7 @@ object AiAssistantInterpreter {
 
         return AiInputSuggestion(
             date = selectedDate,
+            intent = intent,
             summary = summary,
             timeText = timeText,
             categoryId = categoryId,
@@ -79,10 +81,25 @@ object AiAssistantInterpreter {
             return explicit.take(40)
         }
         return source
+            .replace(Regex("""(삭제|지워|지워줘|취소|수정|바꿔|변경|고쳐)(해줘|해 줘)?"""), " ")
             .replace(Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b"""), "")
             .replace(Regex("""([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?"""), "")
             .trim()
             .take(40)
+    }
+
+    private fun extractCrudIntent(source: String): AiCrudIntent {
+        val normalized = source.lowercase()
+        return when {
+            normalized.contains("삭제") ||
+                normalized.contains("지워") ||
+                normalized.contains("취소") -> AiCrudIntent.Delete
+            normalized.contains("수정") ||
+                normalized.contains("바꿔") ||
+                normalized.contains("변경") ||
+                normalized.contains("고쳐") -> AiCrudIntent.Update
+            else -> AiCrudIntent.Create
+        }
     }
 
     private fun extractCategoryId(source: String): String {

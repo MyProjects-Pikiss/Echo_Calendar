@@ -40,8 +40,8 @@ interface EventDao {
     suspend fun deleteSeededEvents(summaryPrefix: String, summaries: List<String>)
 
     @Query(
-        "SELECT Event.* FROM Event " +
-            "JOIN EventFts ON Event.rowid = EventFts.rowid " +
+        "SELECT DISTINCT Event.* FROM Event " +
+            "JOIN EventFts ON Event.id = EventFts.eventId " +
             "WHERE EventFts MATCH :query " +
             "ORDER BY Event.occurredAt DESC, Event.updatedAt DESC"
     )

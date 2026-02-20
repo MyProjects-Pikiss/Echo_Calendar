@@ -25,7 +25,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.Instant
@@ -44,6 +48,7 @@ fun SearchDemoScreen(
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     fun showDatePicker(current: String?, onPicked: (String) -> Unit) {
         val initialDate = runCatching { LocalDate.parse(current) }.getOrNull() ?: LocalDate.now(zoneId)
@@ -72,7 +77,15 @@ fun SearchDemoScreen(
                 modifier = Modifier.weight(1f),
                 value = searchViewModel.query,
                 onValueChange = searchViewModel::onQueryChange,
-                label = { Text("검색어") }
+                label = { Text("검색어") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                        searchViewModel.onSearchSubmit()
+                    }
+                )
             )
             Button(onClick = searchViewModel::onSearchSubmit) {
                 Text("검색")
