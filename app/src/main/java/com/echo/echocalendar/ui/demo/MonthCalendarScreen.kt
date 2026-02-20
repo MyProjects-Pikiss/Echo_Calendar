@@ -50,7 +50,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -683,7 +683,7 @@ fun MonthCalendarScreen(
                     },
                     modifier = Modifier.weight(1f)
                 )
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier
                         .height(bottomBarHeight * 0.6f)
                         .width(1.dp),
@@ -1160,7 +1160,7 @@ private fun ActionPickerRow(
             onClick = onFirstActionSelected,
             modifier = Modifier.weight(1f)
         )
-        Divider(
+        HorizontalDivider(
             modifier = Modifier
                 .height(48.dp)
                 .width(1.dp),
