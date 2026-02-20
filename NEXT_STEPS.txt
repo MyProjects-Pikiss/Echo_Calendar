@@ -1,0 +1,40 @@
+[Echo Calendar - Next Steps]
+
+1) Keep backend server running (when testing)
+- Terminal A:
+  cd /mnt/c/Users/wnstk/Desktop/MyProject/Echo_Calendar/backend
+  source .venv/bin/activate
+  uvicorn app.main:app --host 0.0.0.0 --port 8088 --reload
+
+2) Point Android debug build to backend
+- Edit /mnt/c/Users/wnstk/Desktop/MyProject/Echo_Calendar/local.properties
+- Add/update:
+  AI_API_BASE_URL_DEBUG=http://10.0.2.2:8088
+  AI_SEND_CLIENT_API_KEY_DEBUG=false
+  AI_API_TIMEOUT_MS=12000
+
+3) App smoke test (manual)
+- Run debug app build.
+- In microphone flow, verify:
+  a) AI Input: transcript -> suggestion popup
+  b) AI Search: transcript -> query + filters applied
+  c) AI Refine: only target field changes
+- Also verify fallback message appears when backend is intentionally stopped.
+
+4) Check backend logs while testing
+- Confirm requests are received for:
+  /ai/input-interpret
+  /ai/search-interpret
+  /ai/refine-field
+
+5) Optional quality tuning
+- Collect real Korean utterances that parse poorly.
+- Improve prompts in:
+  /mnt/c/Users/wnstk/Desktop/MyProject/Echo_Calendar/backend/app/prompts.py
+- Re-run:
+  python3 /mnt/c/Users/wnstk/Desktop/MyProject/Echo_Calendar/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
+
+6) Commit/push when ready
+- git add backend NEXT_STEPS.txt
+- git commit -m "Add AI backend MVP and follow-up checklist"
+- git push origin HEAD
