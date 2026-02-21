@@ -18,8 +18,10 @@ cd backend
 set "PATH_CONFIG_FILE=%~dp0AI_ENV_PATH.txt"
 if not exist "%PATH_CONFIG_FILE%" (
   (
-    echo # Put API key file path in the next line.
-    echo %USERPROFILE%\.echo_calendar_ai.env
+    echo # Echo Calendar AI launcher config
+    echo # Format: KEY=VALUE
+    echo # This file points to your local env file where OPENAI_API_KEY is stored.
+    echo OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\.echo_calendar_ai.env
   ) > "%PATH_CONFIG_FILE%"
   echo [INFO] Created path config: %PATH_CONFIG_FILE%
 )
@@ -29,8 +31,32 @@ for /f "usebackq tokens=* delims=" %%L in ("%PATH_CONFIG_FILE%") do (
   set "LINE=%%L"
   if defined LINE (
     if not "!LINE:~0,1!"=="#" (
-      set "RAW_ENV_PATH=!LINE!"
-      goto :path_loaded
+      set "CFG_KEY="
+      set "CFG_VAL="
+      for /f "tokens=1* delims==" %%A in ("!LINE!") do (
+        set "CFG_KEY=%%~A"
+        set "CFG_VAL=%%~B"
+      )
+
+      if /i "!CFG_KEY!"=="OPENAI_API_KEY_FILE_PATH" (
+        set "RAW_ENV_PATH=!CFG_VAL!"
+        goto :path_loaded
+      )
+      REM Backward compatibility: older named keys.
+      if /i "!CFG_KEY!"=="API_KEY_FILE_PATH" (
+        set "RAW_ENV_PATH=!CFG_VAL!"
+        goto :path_loaded
+      )
+      if /i "!CFG_KEY!"=="OPENAI_ENV_FILE" (
+        set "RAW_ENV_PATH=!CFG_VAL!"
+        goto :path_loaded
+      )
+
+      REM Backward compatibility: legacy format with only one path line.
+      if not defined CFG_VAL (
+        set "RAW_ENV_PATH=!LINE!"
+        goto :path_loaded
+      )
     )
   )
 )

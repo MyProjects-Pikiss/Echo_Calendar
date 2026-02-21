@@ -64,7 +64,7 @@
 - `OPENAI_API_KEY` 비어 있음:
   - `launchers\AI_ENV_PATH.txt`에 적힌 키 파일을 수정 후 재실행
 - 키 파일 경로를 바꾸고 싶음:
-  - `launchers\AI_ENV_PATH.txt`의 마지막 경로 한 줄만 원하는 위치로 변경
+  - `launchers\AI_ENV_PATH.txt`에서 `OPENAI_API_KEY_FILE_PATH=원하는경로`로 변경
 - `Backend is not reachable`:
   - 서버 미실행 또는 포트 충돌
   - `launchers\RUN_AI_BACKEND.bat`부터 실행

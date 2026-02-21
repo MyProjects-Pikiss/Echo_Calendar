@@ -1,3 +1,4 @@
-# Put API key file path in the next line.
+# Echo Calendar AI launcher config
+# Format: KEY=VALUE
 # You can change this to any local path outside the git repo.
-%USERPROFILE%\.echo_calendar_ai.env
+OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\.echo_calendar_ai.env
