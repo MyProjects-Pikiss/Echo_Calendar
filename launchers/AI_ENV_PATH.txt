@@ -1,0 +1,3 @@
+# Put API key file path in the next line.
+# You can change this to any local path outside the git repo.
+%USERPROFILE%\.echo_calendar_ai.env

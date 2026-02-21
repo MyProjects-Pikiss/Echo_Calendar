@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 REM One-click backend launcher for Echo Calendar AI (Windows)
-REM - checks backend/.env
+REM - checks local user env file outside git repo
 REM - creates venv if missing
 REM - installs requirements
 REM - starts uvicorn on :8088
@@ -15,39 +15,76 @@ if not exist "backend" (
 
 cd backend
 
-if not exist ".env" (
-  echo [INFO] backend\.env not found. Creating from .env.example ...
-  if not exist ".env.example" (
-    echo [ERROR] backend\.env.example not found.
-    exit /b 1
+set "PATH_CONFIG_FILE=%~dp0AI_ENV_PATH.txt"
+if not exist "%PATH_CONFIG_FILE%" (
+  (
+    echo # Put API key file path in the next line.
+    echo %USERPROFILE%\.echo_calendar_ai.env
+  ) > "%PATH_CONFIG_FILE%"
+  echo [INFO] Created path config: %PATH_CONFIG_FILE%
+)
+
+set "RAW_ENV_PATH="
+for /f "usebackq tokens=* delims=" %%L in ("%PATH_CONFIG_FILE%") do (
+  set "LINE=%%L"
+  if defined LINE (
+    if not "!LINE:~0,1!"=="#" (
+      set "RAW_ENV_PATH=!LINE!"
+      goto :path_loaded
+    )
   )
-  copy ".env.example" ".env" >nul
-  echo [ACTION] Opened backend\.env. Set OPENAI_API_KEY then run this file again.
-  start "" notepad ".env"
+)
+
+:path_loaded
+if not defined RAW_ENV_PATH (
+  echo [ERROR] API key file path is missing in %PATH_CONFIG_FILE%
+  echo [ACTION] Add a full file path in %PATH_CONFIG_FILE% and run again.
+  start "" notepad "%PATH_CONFIG_FILE%"
   exit /b 1
 )
 
-findstr /b "OPENAI_API_KEY=" ".env" >nul
+call set "ENV_FILE=%%RAW_ENV_PATH%%"
+for %%I in ("%ENV_FILE%") do set "ENV_DIR=%%~dpI"
+if not exist "%ENV_DIR%" (
+  mkdir "%ENV_DIR%" >nul 2>&1
+)
+
+if not exist "%ENV_FILE%" (
+  echo [INFO] %ENV_FILE% not found. Creating...
+  (
+    echo OPENAI_API_KEY=sk-xxxx
+    echo OPENAI_MODEL=gpt-4.1-mini
+    echo LLM_TIMEOUT_SECONDS=12
+    echo LLM_MAX_RETRIES=1
+    echo RATE_LIMIT_PER_MINUTE=60
+    echo ENABLE_LOCAL_FALLBACK=true
+  ) > "%ENV_FILE%"
+  echo [ACTION] Opened %ENV_FILE%. Set OPENAI_API_KEY then run this file again.
+  start "" notepad "%ENV_FILE%"
+  exit /b 1
+)
+
+findstr /b "OPENAI_API_KEY=" "%ENV_FILE%" >nul
 if errorlevel 1 (
-  echo [ERROR] OPENAI_API_KEY is missing in backend\.env
-  start "" notepad ".env"
+  echo [ERROR] OPENAI_API_KEY is missing in %ENV_FILE%
+  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 
 set "OPENAI_LINE="
-for /f "usebackq tokens=* delims=" %%L in (`findstr /b "OPENAI_API_KEY=" ".env"`) do (
+for /f "usebackq tokens=* delims=" %%L in (`findstr /b "OPENAI_API_KEY=" "%ENV_FILE%"`) do (
   set "OPENAI_LINE=%%L"
 )
 
 if /i "!OPENAI_LINE!"=="OPENAI_API_KEY=" (
-  echo [ERROR] OPENAI_API_KEY is empty in backend\.env
-  start "" notepad ".env"
+  echo [ERROR] OPENAI_API_KEY is empty in %ENV_FILE%
+  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 
 if /i "!OPENAI_LINE!"=="OPENAI_API_KEY=sk-xxxx" (
   echo [ERROR] OPENAI_API_KEY is still placeholder ^(sk-xxxx^).
-  start "" notepad ".env"
+  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 
@@ -70,7 +107,10 @@ if errorlevel 1 (
 echo.
 echo [READY] Starting Echo Calendar AI backend on http://0.0.0.0:8088
 echo [TIP] Keep this window open while testing the Android app.
+echo [INFO] Loaded key file: %ENV_FILE%
+echo [INFO] Path config file: %PATH_CONFIG_FILE%
 echo.
 
+set "OPENAI_ENV_FILE=%ENV_FILE%"
 call ".venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8088 --reload
 exit /b %errorlevel%

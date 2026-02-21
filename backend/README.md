@@ -15,13 +15,16 @@ This folder contains a minimal FastAPI gateway for Echo Calendar AI.
 
 ```bash
 cd backend
-cp .env.example .env
-# edit .env and set OPENAI_API_KEY
-./scripts/run_server.sh
+cp .env.example ~/.echo_calendar_ai.env
+# edit ~/.echo_calendar_ai.env and set OPENAI_API_KEY
+OPENAI_ENV_FILE=~/.echo_calendar_ai.env ./scripts/run_server.sh
 ```
 
-`backend/.env` and `backend/.env.local` are loaded automatically on startup.
-System environment variables still take precedence.
+Env file loading order:
+- `OPENAI_ENV_FILE` (if set)
+- `~/.echo_calendar_ai.env`
+
+System environment variables still take precedence over file values.
 
 ### Manual start
 
