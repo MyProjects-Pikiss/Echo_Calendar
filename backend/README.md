@@ -11,6 +11,20 @@ This folder contains a minimal FastAPI gateway for Echo Calendar AI.
 
 ## Run
 
+### Quick start (recommended)
+
+```bash
+cd backend
+cp .env.example .env
+# edit .env and set OPENAI_API_KEY
+./scripts/run_server.sh
+```
+
+`backend/.env` and `backend/.env.local` are loaded automatically on startup.
+System environment variables still take precedence.
+
+### Manual start
+
 ```bash
 cd backend
 python -m venv .venv

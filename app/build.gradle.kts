@@ -41,10 +41,14 @@ android {
 
     buildTypes {
         debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
             buildConfigField(
                 "String",
                 "AI_API_BASE_URL",
-                project.stringProperty("AI_API_BASE_URL_DEBUG", project.stringProperty("AI_API_BASE_URL")).asBuildConfigString()
+                project.stringProperty(
+                    "AI_API_BASE_URL_DEBUG",
+                    project.stringProperty("AI_API_BASE_URL", "http://10.0.2.2:8088")
+                ).asBuildConfigString()
             )
             buildConfigField(
                 "String",
@@ -54,7 +58,7 @@ android {
             buildConfigField(
                 "boolean",
                 "AI_SEND_CLIENT_API_KEY",
-                project.booleanProperty("AI_SEND_CLIENT_API_KEY_DEBUG", true).toString()
+                project.booleanProperty("AI_SEND_CLIENT_API_KEY_DEBUG", false).toString()
             )
             buildConfigField(
                 "boolean",
@@ -64,6 +68,7 @@ android {
         }
         release {
             isMinifyEnabled = false
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
             buildConfigField(
                 "String",
                 "AI_API_BASE_URL",
