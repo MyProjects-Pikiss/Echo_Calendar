@@ -18,11 +18,17 @@ AI_API_KEY_RELEASE=
 AI_API_TIMEOUT_MS=12000
 
 # Security toggles
-AI_SEND_CLIENT_API_KEY_DEBUG=true
+AI_SEND_CLIENT_API_KEY_DEBUG=false
 AI_SEND_CLIENT_API_KEY_RELEASE=false
 AI_REQUIRE_HTTPS_DEBUG=false
 AI_REQUIRE_HTTPS_RELEASE=true
 ```
+
+Debug build default behavior in this repository:
+
+- `AI_API_BASE_URL` defaults to `http://10.0.2.2:8088` when not set.
+- `AI_SEND_CLIENT_API_KEY_DEBUG` defaults to `false`.
+- Cleartext HTTP is enabled only for debug.
 
 ## 2) Security policy
 
