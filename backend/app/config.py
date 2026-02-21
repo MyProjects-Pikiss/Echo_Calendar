@@ -5,27 +5,35 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _parse_env_file(env_file: Path, original_env_keys: set[str]) -> None:
+    if not env_file.exists():
+        return
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in original_env_keys:
+            continue
+        value = value.strip()
+        if value and len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", "\""}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
 def _load_local_env_files() -> None:
-    """Load backend/.env and backend/.env.local without overriding OS env vars."""
+    """Load user-local env files without overriding existing OS environment variables."""
     original_env_keys = set(os.environ.keys())
-    backend_root = Path(__file__).resolve().parents[1]
-    env_files = (backend_root / ".env", backend_root / ".env.local")
+    external_env = os.getenv("OPENAI_ENV_FILE", "").strip()
+
+    env_files: list[Path] = []
+    if external_env:
+        env_files.append(Path(external_env).expanduser())
+    env_files.append(Path.home() / ".echo_calendar_ai.env")
 
     for env_file in env_files:
-        if not env_file.exists():
-            continue
-        for raw_line in env_file.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            if not key or key in original_env_keys:
-                continue
-            value = value.strip()
-            if value and len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", "\""}:
-                value = value[1:-1]
-            os.environ[key] = value
+        _parse_env_file(env_file, original_env_keys)
 
 
 _load_local_env_files()
