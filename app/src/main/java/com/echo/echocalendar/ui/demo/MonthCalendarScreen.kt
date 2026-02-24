@@ -148,7 +148,7 @@ fun MonthCalendarScreen(
                     val suggestionDraft = EventDraft(
                         summary = suggestion.summary,
                         timeText = suggestion.timeText,
-                        categoryId = suggestion.categoryId,
+                        categoryId = normalizeCategoryIdOrNull(suggestion.categoryId) ?: "other",
                         placeText = suggestion.placeText,
                         body = suggestion.body,
                         labelsText = suggestion.labelsText
@@ -242,7 +242,9 @@ fun MonthCalendarScreen(
                             selectedDate = editState.date
                         )
                         val refined = result.suggestion
-                        pendingEdit = editState.copy(draft = applyFieldValue(editState.draft, refined.field, refined.value))
+                        pendingEdit = editState.copy(
+                            draft = applyFieldValue(editState.draft, refined.field, refined.value)
+                        )
                         editError = refined.missingRequired
                             .takeIf { it.isNotEmpty() }
                             ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
@@ -583,7 +585,7 @@ fun MonthCalendarScreen(
                                     draft = EventDraft(
                                         summary = "",
                                         timeText = "09:00",
-                                        categoryId = CategoryDefaults.categories.first().id,
+                                        categoryId = "other",
                                         placeText = "",
                                         body = "",
                                         labelsText = ""
@@ -796,7 +798,7 @@ fun MonthCalendarScreen(
                             calendarViewModel.addEvent(
                                 date = editState.date,
                                 time = parsedTime,
-                                categoryId = editState.draft.categoryId,
+                                categoryId = editState.draft.categoryId.trim(),
                                 summary = summary,
                                 body = body,
                                 placeText = placeText,
@@ -809,7 +811,7 @@ fun MonthCalendarScreen(
                                 eventId = eventId,
                                 date = editState.date,
                                 time = parsedTime,
-                                categoryId = editState.draft.categoryId,
+                                categoryId = editState.draft.categoryId.trim(),
                                 summary = summary,
                                 body = body,
                                 placeText = placeText,
@@ -1257,6 +1259,9 @@ private fun validateDraft(
     if (draft.categoryId.isBlank()) {
         return DraftValidationResult(parsedTime = null, errorMessage = "카테고리를 선택하세요.")
     }
+    if (draft.categoryId.trim() !in CategoryDefaults.categoryIds) {
+        return DraftValidationResult(parsedTime = null, errorMessage = "유효한 카테고리를 선택하세요.")
+    }
     val parsedTime = runCatching {
         LocalTime.parse(draft.timeText.trim(), inputTimeFormatter)
     }.getOrNull()
@@ -1282,10 +1287,22 @@ private fun valueOfField(draft: EventDraft, field: DraftField): String = when (f
 private fun applyFieldValue(draft: EventDraft, field: DraftField, value: String): EventDraft = when (field) {
     DraftField.Summary -> draft.copy(summary = value)
     DraftField.Time -> draft.copy(timeText = value)
-    DraftField.Category -> draft.copy(categoryId = value)
+    DraftField.Category -> draft.copy(
+        categoryId = normalizeCategoryIdOrNull(value) ?: draft.categoryId
+    )
     DraftField.Place -> draft.copy(placeText = value)
     DraftField.Labels -> draft.copy(labelsText = value)
     DraftField.Body -> draft.copy(body = value)
+}
+
+private fun normalizeCategoryIdOrNull(raw: String): String? {
+    val normalized = raw.trim()
+    if (normalized.isBlank()) return null
+    val category = CategoryDefaults.categories.firstOrNull { candidate ->
+        candidate.id.equals(normalized, ignoreCase = true) ||
+            candidate.displayName.equals(normalized, ignoreCase = true)
+    }
+    return category?.id
 }
 
 private fun candidateEventsForDate(

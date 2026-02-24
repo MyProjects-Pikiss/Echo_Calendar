@@ -107,7 +107,7 @@ object AiAssistantInterpreter {
             source.contains(category.displayName, ignoreCase = true) ||
                 source.contains(category.id, ignoreCase = true)
         }
-        return category?.id ?: CategoryDefaults.categories.first().id
+        return category?.id ?: "other"
     }
 
     private fun extractPlaceText(source: String): String? {

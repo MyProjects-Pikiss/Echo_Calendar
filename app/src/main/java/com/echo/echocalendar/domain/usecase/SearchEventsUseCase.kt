@@ -1,5 +1,6 @@
 package com.echo.echocalendar.domain.usecase
 
+import android.database.sqlite.SQLiteException
 import com.echo.echocalendar.data.local.AppDatabase
 import com.echo.echocalendar.data.local.EventEntity
 import java.time.LocalDate
@@ -18,10 +19,15 @@ class SearchEventsUseCase(
     ): List<EventEntity> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
-        val ftsQuery = trimmed
-            .split(Regex("\\s+"))
-            .joinToString(" ") { "$it*" }
-        val baseResults = database.eventDao().fullTextSearch(ftsQuery)
+        val ftsQuery = buildSafeFtsQuery(trimmed)
+        if (ftsQuery.isBlank()) return emptyList()
+        val baseResults = try {
+            database.eventDao().fullTextSearch(ftsQuery)
+        } catch (_: SQLiteException) {
+            return emptyList()
+        } catch (_: IllegalArgumentException) {
+            return emptyList()
+        }
         val parsedFrom = dateFrom.toLocalDateOrNull()
         val parsedTo = dateTo.toLocalDateOrNull()
         val categoryIdSet = categoryIds
@@ -48,6 +54,14 @@ class SearchEventsUseCase(
             true
         }
     }
+}
+
+private fun buildSafeFtsQuery(query: String): String {
+    val tokens = Regex("""[\p{L}\p{N}_]+""")
+        .findAll(query)
+        .map { it.value }
+        .toList()
+    return tokens.joinToString(" ") { "$it*" }
 }
 
 private fun String?.toLocalDateOrNull(): LocalDate? {

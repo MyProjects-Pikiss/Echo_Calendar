@@ -32,7 +32,11 @@ def _normalize_time(value: str) -> str:
         return text
     hour, minute = text.split(":", 1)
     if hour.isdigit() and minute.isdigit():
-        return f"{int(hour):02d}:{int(minute):02d}"
+        hour_num = int(hour)
+        minute_num = int(minute)
+        if 0 <= hour_num <= 23 and 0 <= minute_num <= 59:
+            return f"{hour_num:02d}:{minute_num:02d}"
+        return ""
     return text
 
 
@@ -73,7 +77,12 @@ def ensure_refine_response(raw: dict[str, Any], field: str, current_value: str) 
     candidate = dict(raw)
     candidate["mode"] = "refine"
     candidate["field"] = field
-    candidate["value"] = _trimmed_text(candidate.get("value")) or current_value
+    value = _trimmed_text(candidate.get("value")) or current_value
+    if field == "time":
+        value = _normalize_time(value)
+        if not value:
+            value = _normalize_time(current_value)
+    candidate["value"] = value
     candidate["missingRequired"] = _normalize_string_list(candidate.get("missingRequired"))
     try:
         return RefineFieldResponse.model_validate(candidate)

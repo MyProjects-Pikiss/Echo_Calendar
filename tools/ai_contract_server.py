@@ -75,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
                 "date": selected_date,
                 "summary": summary or "",
                 "time": time,
-                "categoryId": "default",
+                "categoryId": "other",
                 "placeText": "",
                 "body": transcript,
                 "labels": [],
@@ -107,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
                 "query": transcript.replace("찾아줘", "").replace("검색", "").strip(),
                 "dateFrom": date_from,
                 "dateTo": date_to,
-                "categoryIds": ["health"] if "병원" in transcript else [],
+                "categoryIds": ["medical"] if "병원" in transcript else [],
             },
         )
 

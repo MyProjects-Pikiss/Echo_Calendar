@@ -2,6 +2,7 @@ package com.echo.echocalendar.ui.demo
 
 import android.util.Log
 import com.echo.echocalendar.BuildConfig
+import com.echo.echocalendar.data.local.CategoryDefaults
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URI
@@ -40,7 +41,7 @@ class HttpAiApiGateway : AiApiGateway {
             intent = intent,
             summary = json.optString("summary"),
             timeText = json.optString("time", ""),
-            categoryId = json.optString("categoryId", ""),
+            categoryId = normalizeCategoryIdOrNull(json.optString("categoryId", "")) ?: "other",
             placeText = json.optString("placeText", ""),
             body = json.optString("body", transcript),
             labelsText = json.optJSONArray("labels").toStringList().joinToString(", "),
@@ -60,7 +61,10 @@ class HttpAiApiGateway : AiApiGateway {
             query = query,
             dateFrom = json.optNullableString("dateFrom"),
             dateTo = json.optNullableString("dateTo"),
-            categoryIds = json.optJSONArray("categoryIds").toStringList()
+            categoryIds = json.optJSONArray("categoryIds")
+                .toStringList()
+                .mapNotNull(::normalizeCategoryIdOrNull)
+                .distinct()
         )
     }
 
@@ -81,9 +85,14 @@ class HttpAiApiGateway : AiApiGateway {
         val responseField = DraftField.entries.firstOrNull { it.value == json.optString("field") } ?: return null
         val value = json.optString("value").trim()
         if (value.isBlank()) return null
+        val normalizedValue = if (responseField == DraftField.Category) {
+            normalizeCategoryIdOrNull(value) ?: return null
+        } else {
+            value
+        }
         return AiRefineSuggestion(
             field = responseField,
-            value = value,
+            value = normalizedValue,
             missingRequired = json.optJSONArray("missingRequired").toStringList()
         )
     }
@@ -152,4 +161,14 @@ private fun JSONArray?.toStringList(): List<String> {
 private fun JSONObject.optNullableString(key: String): String? {
     if (!has(key) || isNull(key)) return null
     return optString(key)
+}
+
+private fun normalizeCategoryIdOrNull(raw: String): String? {
+    val normalized = raw.trim()
+    if (normalized.isBlank()) return null
+    val category = CategoryDefaults.categories.firstOrNull { candidate ->
+        candidate.id.equals(normalized, ignoreCase = true) ||
+            candidate.displayName.equals(normalized, ignoreCase = true)
+    }
+    return category?.id
 }
