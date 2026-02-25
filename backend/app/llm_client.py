@@ -32,7 +32,6 @@ class OpenAILlmClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.2,
         }
         headers = {
             "Authorization": f"Bearer {self._api_key}",
@@ -55,6 +54,14 @@ class OpenAILlmClient:
                 if not isinstance(parsed, dict):
                     raise LlmClientError("LLM response is not a JSON object")
                 return parsed
+            except httpx.HTTPStatusError as exc:
+                response_preview = exc.response.text.strip().replace("\n", " ")
+                if len(response_preview) > 600:
+                    response_preview = response_preview[:600] + "...(truncated)"
+                last_error = LlmClientError(
+                    f"HTTP {exc.response.status_code} from OpenAI: {response_preview}"
+                )
+                await asyncio.sleep(0.25)
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 await asyncio.sleep(0.25)

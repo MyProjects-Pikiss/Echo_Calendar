@@ -71,8 +71,12 @@ if not defined RAW_ENV_PATH (
   exit /b 1
 )
 
-call set "ENV_FILE=%%RAW_ENV_PATH%%"
-set "ENV_FILE=%ENV_FILE:"=%"
+set "ENV_FILE=!RAW_ENV_PATH!"
+set "ENV_FILE=!ENV_FILE:"=!"
+set "ENV_FILE=!ENV_FILE:%%USERPROFILE%%=%USERPROFILE%!"
+set "ENV_FILE=!ENV_FILE:%%HOMEDRIVE%%=%HOMEDRIVE%!"
+set "ENV_FILE=!ENV_FILE:%%HOMEPATH%%=%HOMEPATH%!"
+call set "ENV_FILE=%%ENV_FILE%%"
 
 if not exist "%ENV_FILE%" (
   echo [ERROR] Env file not found: %ENV_FILE%

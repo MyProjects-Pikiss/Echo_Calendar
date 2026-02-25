@@ -19,8 +19,10 @@ set RESULT=%errorlevel%
 
 if %RESULT% neq 0 (
   echo [DONE] Backend window is still open. Check logs there.
+  pause
   exit /b %RESULT%
 )
 
 echo [DONE] Server launch + contract test succeeded.
+pause
 exit /b 0
