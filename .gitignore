@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local secrets
+.env
+.env.*
+*.env
+!launchers/AI_ENV_TEMPLATE.env
+
+# Local tooling artifacts
+.gradle-local/
+tools/__pycache__/

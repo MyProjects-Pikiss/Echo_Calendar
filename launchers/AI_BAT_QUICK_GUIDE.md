@@ -14,13 +14,13 @@
 아래 설정은 `RUN_AND_TEST_AI_BACKEND.bat` 포함 모든 실행 방식의 공통 선행 조건입니다.
 
 1. `launchers\AI_ENV_PATH.txt`를 열고 `OPENAI_API_KEY_FILE_PATH=...` 경로를 정합니다.
-   - 기본값: `%USERPROFILE%\.echo_calendar_ai.env`
-2. 위 경로에 env 파일을 수동 생성합니다. (프로젝트 폴더 밖 권장)
-3. `launchers\AI_ENV_TEMPLATE.env` 내용을 복사해 붙여넣습니다.
-4. `OPENAI_API_KEY=sk-xxxx`를 실제 키로 바꿉니다.
+   - 기본값: `%USERPROFILE%\AI_ENV_TEMPLATE.env`
+2. `launchers\AI_ENV_TEMPLATE.env` 파일을 복제(복사-붙여넣기)해서 위 경로에 둡니다. (프로젝트 폴더 밖 권장)
+3. 복제한 외부 env 파일에서 `OPENAI_API_KEY=sk-xxxx`를 실제 키로 바꿉니다.
+4. 다시 `launchers\RUN_AI_BACKEND.bat` 또는 `RUN_AND_TEST_AI_BACKEND.bat` 실행
 
 보안 권장:
-- 실제 키 파일(`.echo_calendar_ai.env`)은 프로젝트 폴더 밖에 유지
+- 실제 키 파일(`AI_ENV_TEMPLATE.env`)은 프로젝트 폴더 밖에 유지
 - Git에는 `launchers\AI_ENV_PATH.txt`(경로 정보)와 `launchers\AI_ENV_TEMPLATE.env`(키 없는 템플릿)만 포함
 
 ## 2) 가장 쉬운 방법 (권장)
@@ -66,7 +66,7 @@
 
 - `Env file not found`:
   - `launchers\AI_ENV_PATH.txt`의 경로가 실제 파일 위치와 같은지 확인
-  - 해당 경로 파일을 수동 생성하고 `launchers\AI_ENV_TEMPLATE.env`를 복사
+  - `launchers\AI_ENV_TEMPLATE.env`를 복제(복사-붙여넣기)해 해당 경로에 배치
 - `OPENAI_API_KEY` 비어 있음:
   - `launchers\AI_ENV_PATH.txt`에 적힌 키 파일을 수정 후 재실행
 - 키 파일 경로를 바꾸고 싶음:

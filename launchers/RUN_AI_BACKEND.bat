@@ -24,7 +24,7 @@ if not exist "%PATH_CONFIG_FILE%" (
     echo # Echo Calendar AI launcher config
     echo # Format: KEY=VALUE
     echo # This file points to your local env file where OPENAI_API_KEY is stored.
-    echo OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\.echo_calendar_ai.env
+    echo OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\AI_ENV_TEMPLATE.env
   ) > "%PATH_CONFIG_FILE%"
   echo [INFO] Created path config: %PATH_CONFIG_FILE%
 )
@@ -76,7 +76,7 @@ set "ENV_FILE=%ENV_FILE:"=%"
 
 if not exist "%ENV_FILE%" (
   echo [ERROR] Env file not found: %ENV_FILE%
-  echo [ACTION] Create the file manually outside the project and copy template from launchers\AI_ENV_TEMPLATE.env
+  echo [ACTION] Duplicate launchers\AI_ENV_TEMPLATE.env to %ENV_FILE% and edit OPENAI_API_KEY
   exit /b 1
 )
 
