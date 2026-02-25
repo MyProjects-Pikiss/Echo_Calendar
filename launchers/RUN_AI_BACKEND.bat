@@ -2,18 +2,21 @@
 setlocal enabledelayedexpansion
 
 REM One-click backend launcher for Echo Calendar AI (Windows)
-REM - checks local user env file outside git repo
+REM - reads local env file path from AI_ENV_PATH.txt
 REM - creates venv if missing
 REM - installs requirements
 REM - starts uvicorn on :8088
 
-cd /d "%~dp0.."
-if not exist "backend" (
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..") do set "PROJECT_ROOT=%%~fI"
+
+if not exist "%PROJECT_ROOT%\backend\" (
   echo [ERROR] backend folder not found.
+  echo [INFO] Expected path: "%PROJECT_ROOT%\backend"
   exit /b 1
 )
 
-cd backend
+cd /d "%PROJECT_ROOT%\backend"
 
 set "PATH_CONFIG_FILE=%~dp0AI_ENV_PATH.txt"
 if not exist "%PATH_CONFIG_FILE%" (
@@ -65,35 +68,21 @@ for /f "usebackq tokens=* delims=" %%L in ("%PATH_CONFIG_FILE%") do (
 if not defined RAW_ENV_PATH (
   echo [ERROR] API key file path is missing in %PATH_CONFIG_FILE%
   echo [ACTION] Add a full file path in %PATH_CONFIG_FILE% and run again.
-  start "" notepad "%PATH_CONFIG_FILE%"
   exit /b 1
 )
 
 call set "ENV_FILE=%%RAW_ENV_PATH%%"
-for %%I in ("%ENV_FILE%") do set "ENV_DIR=%%~dpI"
-if not exist "%ENV_DIR%" (
-  mkdir "%ENV_DIR%" >nul 2>&1
-)
+set "ENV_FILE=%ENV_FILE:"=%"
 
 if not exist "%ENV_FILE%" (
-  echo [INFO] %ENV_FILE% not found. Creating...
-  (
-    echo OPENAI_API_KEY=sk-xxxx
-    echo OPENAI_MODEL=gpt-4.1-mini
-    echo LLM_TIMEOUT_SECONDS=12
-    echo LLM_MAX_RETRIES=1
-    echo RATE_LIMIT_PER_MINUTE=60
-    echo ENABLE_LOCAL_FALLBACK=true
-  ) > "%ENV_FILE%"
-  echo [ACTION] Opened %ENV_FILE%. Set OPENAI_API_KEY then run this file again.
-  start "" notepad "%ENV_FILE%"
+  echo [ERROR] Env file not found: %ENV_FILE%
+  echo [ACTION] Create the file manually outside the project and copy template from launchers\AI_ENV_TEMPLATE.env
   exit /b 1
 )
 
 findstr /b "OPENAI_API_KEY=" "%ENV_FILE%" >nul
 if errorlevel 1 (
   echo [ERROR] OPENAI_API_KEY is missing in %ENV_FILE%
-  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 
@@ -104,13 +93,11 @@ for /f "usebackq tokens=* delims=" %%L in (`findstr /b "OPENAI_API_KEY=" "%ENV_F
 
 if /i "!OPENAI_LINE!"=="OPENAI_API_KEY=" (
   echo [ERROR] OPENAI_API_KEY is empty in %ENV_FILE%
-  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 
 if /i "!OPENAI_LINE!"=="OPENAI_API_KEY=sk-xxxx" (
   echo [ERROR] OPENAI_API_KEY is still placeholder ^(sk-xxxx^).
-  start "" notepad "%ENV_FILE%"
   exit /b 1
 )
 

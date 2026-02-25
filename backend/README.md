@@ -54,7 +54,7 @@ pytest -q
 ## Environment variables
 
 - `OPENAI_API_KEY` (optional for local fallback-only mode)
-- `OPENAI_MODEL` (default: `gpt-4.1-mini`)
+- `OPENAI_MODEL` (default: `gpt-5-mini`)
 - `LLM_TIMEOUT_SECONDS` (default: `12`)
 - `LLM_MAX_RETRIES` (default: `1`)
 - `RATE_LIMIT_PER_MINUTE` (default: `60`)

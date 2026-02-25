@@ -9,7 +9,7 @@ REM 3) runs contract test in this window
 cd /d "%~dp0"
 
 echo [INFO] Starting backend in a new window...
-start "Echo Calendar AI Backend" cmd /k "cd /d \"%~dp0\" && call RUN_AI_BACKEND.bat"
+start "Echo Calendar AI Backend" cmd /d /k ""%~dp0RUN_AI_BACKEND.bat""
 
 echo [INFO] Waiting for backend startup...
 timeout /t 7 >nul
