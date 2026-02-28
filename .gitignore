@@ -18,7 +18,7 @@ local.properties
 .env
 .env.*
 *.env
-!launchers/AI_ENV_TEMPLATE.env
+!server/SERVER_ENV_TEMPLATE.env
 
 # Local tooling artifacts
 .gradle-local/

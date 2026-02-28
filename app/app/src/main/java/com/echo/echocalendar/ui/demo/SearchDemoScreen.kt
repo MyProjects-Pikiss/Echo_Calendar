@@ -1,0 +1,286 @@
+package com.echo.echocalendar.ui.demo
+
+import android.app.DatePickerDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.unit.dp
+import com.echo.echocalendar.data.local.CategoryDefaults
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SearchDemoScreen(
+    searchViewModel: SearchViewModel,
+    calendarViewModel: CalendarViewModel,
+    onEventSelected: (() -> Unit)? = null,
+    showSelectedDateSummary: Boolean = true
+) {
+    val zoneId = remember { ZoneId.of("Asia/Seoul") }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+
+    fun showDatePicker(current: String?, onPicked: (String) -> Unit) {
+        val initialDate = runCatching { LocalDate.parse(current) }.getOrNull() ?: LocalDate.now(zoneId)
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                onPicked(LocalDate.of(year, month + 1, dayOfMonth).format(dateFormatter))
+            },
+            initialDate.year,
+            initialDate.monthValue - 1,
+            initialDate.dayOfMonth
+        ).show()
+    }
+
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            text = "검색 데모",
+            style = MaterialTheme.typography.titleLarge
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                modifier = Modifier.weight(1f),
+                value = searchViewModel.query,
+                onValueChange = searchViewModel::onQueryChange,
+                label = { Text("검색어") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                        searchViewModel.onSearchSubmit()
+                    }
+                )
+            )
+            Button(onClick = searchViewModel::onSearchSubmit) {
+                Text("검색")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "날짜 필터", style = MaterialTheme.typography.labelLarge)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    showDatePicker(searchViewModel.dateFromFilter, searchViewModel::onDateFromFilterChange)
+                }
+            ) {
+                Text(searchViewModel.dateFromFilter ?: "시작일 선택")
+            }
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    showDatePicker(searchViewModel.dateToFilter, searchViewModel::onDateToFilterChange)
+                }
+            ) {
+                Text(searchViewModel.dateToFilter ?: "종료일 선택")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "카테고리 필터",
+            style = MaterialTheme.typography.labelLarge
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CategoryDefaults.categories.forEach { category ->
+                FilterChip(
+                    selected = category.id in searchViewModel.categoryFilters,
+                    onClick = { searchViewModel.toggleCategoryFilter(category.id) },
+                    label = { Text(category.displayName) }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        androidx.compose.material3.OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchViewModel.labelFilters.joinToString(", "),
+            onValueChange = searchViewModel::onLabelFiltersChange,
+            label = { Text("라벨 필터 (최대 5개, 쉼표 구분)") },
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "필터를 변경하면 자동으로 재검색됩니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = searchViewModel::onSearchSubmit) {
+                Text("지금 검색")
+            }
+            Button(onClick = searchViewModel::clearFilters) {
+                Text("필터 초기화")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        if (searchViewModel.isLoading) {
+            CircularProgressIndicator(modifier = Modifier.width(24.dp))
+        }
+        searchViewModel.error?.let { errorMessage ->
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        val hasFilters = searchViewModel.dateFromFilter != null ||
+            searchViewModel.dateToFilter != null ||
+            searchViewModel.categoryFilters.isNotEmpty() ||
+            searchViewModel.labelFilters.isNotEmpty()
+        if (hasFilters) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (searchViewModel.aiFiltersApplied) {
+                    "AI 필터 적용됨 (수정하려면 칩을 눌러 제거)"
+                } else {
+                    "사용자 필터 적용됨"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                searchViewModel.dateFromFilter?.let { from ->
+                    FilterChip(
+                        selected = true,
+                        onClick = searchViewModel::clearDateFromFilter,
+                        label = { Text("시작일: $from ✕") }
+                    )
+                }
+                searchViewModel.dateToFilter?.let { to ->
+                    FilterChip(
+                        selected = true,
+                        onClick = searchViewModel::clearDateToFilter,
+                        label = { Text("종료일: $to ✕") }
+                    )
+                }
+                searchViewModel.categoryFilters.forEach { filter ->
+                    val label = CategoryDefaults.categories
+                        .firstOrNull { it.id == filter }
+                        ?.displayName ?: filter
+                    FilterChip(
+                        selected = true,
+                        onClick = { searchViewModel.removeCategoryFilter(filter) },
+                        label = { Text("카테고리: $label ✕") }
+                    )
+                }
+                searchViewModel.labelFilters.forEach { label ->
+                    FilterChip(
+                        selected = true,
+                        onClick = { searchViewModel.removeLabelFilter(label) },
+                        label = { Text("라벨: $label ✕") }
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = if (searchViewModel.hasSearched) {
+                "검색 결과 (${searchViewModel.results.size}건)"
+            } else {
+                "검색 결과"
+            },
+            style = MaterialTheme.typography.titleMedium
+        )
+        if (searchViewModel.hasSearched && !searchViewModel.isLoading && searchViewModel.results.isEmpty()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "조건에 맞는 일정이 없어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        LazyColumn {
+            items(searchViewModel.results) { event ->
+                val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            calendarViewModel.onDateSelected(date)
+                            onEventSelected?.invoke()
+                        }
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(text = event.summary, style = MaterialTheme.typography.titleSmall)
+                        Text(text = date.format(dateFormatter))
+                        event.placeText?.let { place ->
+                            Text(text = place)
+                        }
+                    }
+                }
+            }
+        }
+        if (showSelectedDateSummary) {
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                if (calendarViewModel.eventsOfDay.isEmpty()) {
+                    Text("해당 날짜의 이벤트가 없습니다.")
+                } else {
+                    calendarViewModel.eventsOfDay.forEach { event ->
+                        Text("• ${event.summary}")
+                    }
+                }
+            }
+        }
+    }
+}

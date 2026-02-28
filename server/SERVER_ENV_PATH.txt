@@ -1,0 +1,5 @@
+# Echo Calendar AI launcher config
+# Format: KEY=VALUE
+# You can change this to any local path outside the git repo.
+# Duplicate server\SERVER_ENV_TEMPLATE.env to this path, then edit values.
+OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\SERVER_ENV_TEMPLATE.env
