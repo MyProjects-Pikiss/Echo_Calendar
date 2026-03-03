@@ -513,7 +513,7 @@ async def input_interpret(request: Request) -> JSONResponse:
                 error_message=str(exc),
             )
             if not settings.enable_local_fallback:
-                return stable_error("input", "UPSTREAM_FAILURE", "llm request failed", status=502)
+                return stable_error("input", "UPSTREAM_FAILURE", f"llm request failed: {str(exc)}", status=502)
         except ContractValidationError as exc:
             logger.warning("input_interpret invalid_contract reason=%s", str(exc))
             _record_ai_usage(
@@ -538,7 +538,12 @@ async def input_interpret(request: Request) -> JSONResponse:
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
-        return stable_error("input", "UPSTREAM_FAILURE", "llm is unavailable", status=502)
+        return stable_error(
+            "input",
+            "UPSTREAM_FAILURE",
+            "llm is unavailable: OPENAI_API_KEY is not configured in server process",
+            status=502,
+        )
 
     fallback = local_input_interpret(transcript, selected_date or "1970-01-01")
     _record_ai_usage(
@@ -601,7 +606,7 @@ async def search_interpret(request: Request) -> JSONResponse:
                 error_message=str(exc),
             )
             if not settings.enable_local_fallback:
-                return stable_error("search", "UPSTREAM_FAILURE", "llm request failed", status=502)
+                return stable_error("search", "UPSTREAM_FAILURE", f"llm request failed: {str(exc)}", status=502)
         except ContractValidationError as exc:
             logger.warning("search_interpret invalid_contract reason=%s", str(exc))
             _record_ai_usage(
@@ -626,7 +631,12 @@ async def search_interpret(request: Request) -> JSONResponse:
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
-        return stable_error("search", "UPSTREAM_FAILURE", "llm is unavailable", status=502)
+        return stable_error(
+            "search",
+            "UPSTREAM_FAILURE",
+            "llm is unavailable: OPENAI_API_KEY is not configured in server process",
+            status=502,
+        )
 
     fallback = local_search_interpret(transcript)
     _record_ai_usage(
@@ -704,7 +714,7 @@ async def refine_field(request: Request) -> JSONResponse:
                 error_message=str(exc),
             )
             if not settings.enable_local_fallback:
-                return stable_error("refine", "UPSTREAM_FAILURE", "llm request failed", status=502)
+                return stable_error("refine", "UPSTREAM_FAILURE", f"llm request failed: {str(exc)}", status=502)
         except ContractValidationError as exc:
             logger.warning("refine_field invalid_contract reason=%s", str(exc))
             _record_ai_usage(
@@ -729,7 +739,12 @@ async def refine_field(request: Request) -> JSONResponse:
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
-        return stable_error("refine", "UPSTREAM_FAILURE", "llm is unavailable", status=502)
+        return stable_error(
+            "refine",
+            "UPSTREAM_FAILURE",
+            "llm is unavailable: OPENAI_API_KEY is not configured in server process",
+            status=502,
+        )
 
     fallback = local_refine_field(field, transcript, current_value)
     _record_ai_usage(
@@ -805,7 +820,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 error_message=str(exc),
             )
             if not settings.enable_local_fallback:
-                return stable_error("modify", "UPSTREAM_FAILURE", "llm request failed", status=502)
+                return stable_error("modify", "UPSTREAM_FAILURE", f"llm request failed: {str(exc)}", status=502)
         except ContractValidationError as exc:
             logger.warning("modify_interpret invalid_contract reason=%s", str(exc))
             _record_ai_usage(
@@ -830,7 +845,12 @@ async def modify_interpret(request: Request) -> JSONResponse:
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
-        return stable_error("modify", "UPSTREAM_FAILURE", "llm is unavailable", status=502)
+        return stable_error(
+            "modify",
+            "UPSTREAM_FAILURE",
+            "llm is unavailable: OPENAI_API_KEY is not configured in server process",
+            status=502,
+        )
 
     fallback = local_modify_interpret(
         transcript=transcript,

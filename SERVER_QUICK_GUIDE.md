@@ -48,7 +48,7 @@
 앱 로그(`AiAssistantService`)에서 아래를 확인하세요.
 
 - 원격 성공: `remote_success action=input|search|refine.*`
-- 원격 실패 후 대체: `remote_failure_fallback action=... reason=...`
+- 원격 실패: `remote_failure action=... reason=...`
 
 ## 4-1) 휴일 API 동작 확인
 
@@ -95,10 +95,9 @@
   - 서버 창이 떠 있고 `8088` 포트가 열렸는지 확인
 ## 6) 원격 AI 개념 (참고)
 
-앱의 AI 해석은 2가지 경로로 동작합니다.
+앱의 AI 해석은 원격 AI(backend 경유)만 사용합니다.
 
-- 원격 AI(backend 경유):
+- 원격 AI:
   - 앱 -> `backend` 서버 -> OpenAI API -> 앱 순서로 응답
   - 입력/검색/필드보완 정확도를 높이는 실제 LLM 경로
-- 로컬 fallback:
-  - 서버 실패/미설정 시 앱 내부 규칙 해석기로 자동 대체
+  - 키 미설정/업스트림 실패 시 오류를 반환합니다. (로컬 fallback 비활성)

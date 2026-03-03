@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.speech.RecognizerIntent
 import android.util.Log
-import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -85,7 +84,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import com.echo.echocalendar.SettingsKeys
@@ -100,21 +98,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-
-private const val DEFAULT_AUTO_TIME_TEXT = "09:00"
-
-private fun normalizeAutoDefaultTime(raw: String?): String {
-    val parsed = runCatching {
-        LocalTime.parse(raw?.trim().orEmpty(), DateTimeFormatter.ofPattern("H:mm"))
-    }.getOrNull() ?: return DEFAULT_AUTO_TIME_TEXT
-    return parsed.format(DateTimeFormatter.ofPattern("HH:mm"))
-}
-
-private fun parseHourMinute(timeText: String): Pair<Int, Int> {
-    val parsed = runCatching { LocalTime.parse(timeText, DateTimeFormatter.ofPattern("HH:mm")) }.getOrNull()
-        ?: return 9 to 0
-    return parsed.hour to parsed.minute
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -161,19 +144,6 @@ fun MonthCalendarScreen(
     val settingsPrefs = remember(context) {
         context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
     }
-    var autoDefaultTimeEnabled by remember {
-        mutableStateOf(settingsPrefs.getBoolean(SettingsKeys.KEY_AUTO_DEFAULT_TIME_ENABLED, true))
-    }
-    var autoDefaultTimeText by remember {
-        mutableStateOf(
-            normalizeAutoDefaultTime(
-                settingsPrefs.getString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, DEFAULT_AUTO_TIME_TEXT)
-            )
-        )
-    }
-    val initialAutoTime = remember(autoDefaultTimeText) { parseHourMinute(autoDefaultTimeText) }
-    var autoDefaultHour by remember { mutableIntStateOf(initialAutoTime.first) }
-    var autoDefaultMinute by remember { mutableIntStateOf(initialAutoTime.second) }
     var alarmAlertMode by remember {
         mutableStateOf(
             settingsPrefs.getString(
@@ -222,9 +192,9 @@ fun MonthCalendarScreen(
                         val wantsAlarm = wantsAlarmFromTranscript(transcript)
                         val wantsYearlyRecurring = wantsYearlyRecurringFromTranscript(transcript)
                         val suggestionRepeatYearly = suggestion.repeatYearly ?: if (wantsYearlyRecurring) true else null
-                        val isAutoTimeApplied = autoDefaultTimeEnabled && suggestion.timeText.isBlank()
+                        val isAutoTimeApplied = suggestion.timeText.isBlank()
                         val resolvedTimeText = suggestion.timeText.trim().ifBlank {
-                            if (autoDefaultTimeEnabled) String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute) else ""
+                            LocalTime.now(zoneId).format(timeFormatter)
                         }
                         val suggestionDraft = EventDraft(
                             summary = suggestion.summary,
@@ -796,7 +766,7 @@ fun MonthCalendarScreen(
                                     date = calendarViewModel.selectedDate,
                                     draft = EventDraft(
                                         summary = "",
-                                        timeText = "09:00",
+                                        timeText = LocalTime.now(zoneId).format(timeFormatter),
                                         isYearlyRecurring = false,
                                         categoryId = "other",
                                         placeText = "",
@@ -1076,15 +1046,6 @@ fun MonthCalendarScreen(
     }
 
     if (isSettingsOpen) {
-        LaunchedEffect(isSettingsOpen) {
-            val normalized = normalizeAutoDefaultTime(
-                settingsPrefs.getString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, DEFAULT_AUTO_TIME_TEXT)
-            )
-            autoDefaultTimeText = normalized
-            val (hour, minute) = parseHourMinute(normalized)
-            autoDefaultHour = hour
-            autoDefaultMinute = minute
-        }
         Dialog(onDismissRequest = { isSettingsOpen = false }) {
             Surface(
                 shape = MaterialTheme.shapes.large,
@@ -1103,92 +1064,10 @@ fun MonthCalendarScreen(
                         text = "설정",
                         style = MaterialTheme.typography.titleLarge
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = "자동 시간",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "AI 입력에서 시간이 비면 09:00을 자동 입력",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        Switch(
-                            checked = autoDefaultTimeEnabled,
-                            onCheckedChange = { enabled ->
-                                autoDefaultTimeEnabled = enabled
-                                settingsPrefs.edit()
-                                    .putBoolean(SettingsKeys.KEY_AUTO_DEFAULT_TIME_ENABLED, enabled)
-                                    .apply()
-                            }
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AndroidView(
-                            factory = { ctx ->
-                                NumberPicker(ctx).apply {
-                                    minValue = 0
-                                    maxValue = 23
-                                    wrapSelectorWheel = true
-                                    setFormatter { value -> String.format("%02d", value) }
-                                }
-                            },
-                            update = { picker ->
-                                picker.value = autoDefaultHour
-                                picker.setOnValueChangedListener { _, _, newValue ->
-                                    autoDefaultHour = newValue
-                                    val normalized = String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute)
-                                    autoDefaultTimeText = normalized
-                                    settingsPrefs.edit()
-                                        .putString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, normalized)
-                                        .apply()
-                                }
-                                picker.isEnabled = autoDefaultTimeEnabled
-                            },
-                            modifier = Modifier.width(96.dp)
-                        )
-                        Text(
-                            text = ":",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        AndroidView(
-                            factory = { ctx ->
-                                NumberPicker(ctx).apply {
-                                    minValue = 0
-                                    maxValue = 59
-                                    wrapSelectorWheel = true
-                                    setFormatter { value -> String.format("%02d", value) }
-                                }
-                            },
-                            update = { picker ->
-                                picker.value = autoDefaultMinute
-                                picker.setOnValueChangedListener { _, _, newValue ->
-                                    autoDefaultMinute = newValue
-                                    val normalized = String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute)
-                                    autoDefaultTimeText = normalized
-                                    settingsPrefs.edit()
-                                        .putString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, normalized)
-                                        .apply()
-                                }
-                                picker.isEnabled = autoDefaultTimeEnabled
-                            },
-                            modifier = Modifier.width(96.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "시간을 말하지 않으면 기기 현재 시간이 자동으로 입력됩니다.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     HorizontalDivider()
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(

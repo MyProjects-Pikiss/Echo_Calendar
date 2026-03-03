@@ -66,7 +66,7 @@ class AiAssistantService(
         if (!token.isNullOrBlank()) return token
         val failure = remote.exceptionOrNull()
         val reason = normalizeFailureReason(failure)
-        logRemoteFailure("usage.login", reason)
+        logRemoteFailure("usage.login", reason, failure)
         throw AiRemoteException(
             userMessage = toUserMessage("usage.login", reason, failure),
             reason = reason,
@@ -80,7 +80,7 @@ class AiAssistantService(
         if (!token.isNullOrBlank()) return token
         val failure = remote.exceptionOrNull()
         val reason = normalizeFailureReason(failure)
-        logRemoteFailure("usage.signup", reason)
+        logRemoteFailure("usage.signup", reason, failure)
         throw AiRemoteException(
             userMessage = toUserMessage("usage.signup", reason, failure),
             reason = reason,
@@ -94,7 +94,7 @@ class AiAssistantService(
         if (summary != null) return summary
         val failure = remote.exceptionOrNull()
         val reason = normalizeFailureReason(failure)
-        logRemoteFailure("usage.me", reason)
+        logRemoteFailure("usage.me", reason, failure)
         throw AiRemoteException(
             userMessage = toUserMessage("usage.me", reason, failure),
             reason = reason,
@@ -106,8 +106,19 @@ class AiAssistantService(
         safeLog { Log.i(TAG, "remote_success action=$action") }
     }
 
-    private fun logRemoteFailure(action: String, reason: String) {
-        safeLog { Log.w(TAG, "remote_failure action=$action reason=$reason") }
+    private fun logRemoteFailure(action: String, reason: String, error: Throwable?) {
+        val api = error as? AiApiException
+        val status = api?.statusCode?.toString() ?: "-"
+        val code = api?.errorCode ?: "-"
+        val serverMessage = api?.serverMessage?.take(120)?.replace("\n", " ") ?: "-"
+        val errorClass = error?.javaClass?.simpleName ?: "-"
+        val message = error?.message?.take(200)?.replace("\n", " ") ?: "-"
+        safeLog {
+            Log.w(
+                TAG,
+                "remote_failure action=$action reason=$reason status=$status code=$code serverMessage=$serverMessage errorClass=$errorClass error=$message"
+            )
+        }
     }
 
     private inline fun safeLog(block: () -> Unit) {
@@ -126,7 +137,7 @@ class AiAssistantService(
         }
         val failure = remote.exceptionOrNull()
         val reason = normalizeFailureReason(failure)
-        logRemoteFailure(action, reason)
+        logRemoteFailure(action, reason, failure)
         throw AiRemoteException(
             userMessage = toUserMessage(action, reason, failure),
             reason = reason,
@@ -175,9 +186,9 @@ class AiAssistantService(
         val isAuthAction = action == "usage.login" || action == "usage.signup" || action == "usage.me"
         if (error is AiApiException) {
             val serverMessage = error.serverMessage?.trim().orEmpty()
-            if (serverMessage.isNotBlank()) return serverMessage
+            if (serverMessage.isNotBlank()) return withDebugDetail(serverMessage, reason, error)
         }
-        return when (reason) {
+        val base = when (reason) {
             "timeout" -> if (isAuthAction) {
                 "로그인 서버 응답이 지연되고 있어요. 인터넷 연결을 확인하고 다시 시도해 주세요."
             } else {
@@ -205,6 +216,17 @@ class AiAssistantService(
                 "AI 기능을 사용할 수 없어요. 인터넷 연결 또는 서버 상태를 확인해 주세요."
             }
         }
+        return withDebugDetail(base, reason, error)
+    }
+
+    private fun withDebugDetail(base: String, reason: String, error: Throwable?): String {
+        val api = error as? AiApiException
+        val details = buildList {
+            add("reason=$reason")
+            api?.let { add("status=${it.statusCode}") }
+            api?.errorCode?.takeIf { it.isNotBlank() }?.let { add("code=$it") }
+        }
+        return "$base (${details.joinToString(", ")})"
     }
 
     companion object {

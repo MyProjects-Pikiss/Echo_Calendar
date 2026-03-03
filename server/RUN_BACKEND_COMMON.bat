@@ -14,7 +14,6 @@ REM One-click backend launcher for Echo Calendar AI (Windows)
 REM - reads local env file path from SERVER_ENV_PATH.txt
 REM - creates venv if missing
 REM - installs requirements
-REM - writes resolved OPENAI env file path for runtime launchers
 
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%") do set "SERVER_ROOT=%%~fI"
@@ -88,18 +87,12 @@ set "ENV_FILE=!ENV_FILE:%%USERPROFILE%%=%USERPROFILE%!"
 set "ENV_FILE=!ENV_FILE:%%HOMEDRIVE%%=%HOMEDRIVE%!"
 set "ENV_FILE=!ENV_FILE:%%HOMEPATH%%=%HOMEPATH%!"
 call set "ENV_FILE=%%ENV_FILE%%"
-set "RESOLVED_ENV_FILE=%SERVER_ROOT%\RUN_ENV_PATH.resolved.txt"
-
 if not exist "%ENV_FILE%" (
   echo [ERROR] Env file not found: %ENV_FILE%
   echo [ACTION] Duplicate server\SERVER_ENV_TEMPLATE.env to %ENV_FILE% and edit OPENAI_API_KEY
   set "RESULT=1"
   goto :end
 )
-
-(
-  echo OPENAI_ENV_FILE=%ENV_FILE%
-) > "%RESOLVED_ENV_FILE%"
 
 set "OPENAI_LINE="
 set "HOLIDAY_LINE="
@@ -169,7 +162,6 @@ echo.
 echo [READY] Backend setup complete.
 echo [INFO] Loaded key file: %ENV_FILE%
 echo [INFO] Path config file: %PATH_CONFIG_FILE%
-echo [INFO] Resolved env path file: %RESOLVED_ENV_FILE%
 echo [INFO] Use RUN_ALL_SERVERS.bat to start AI/CORE servers.
 set "RESULT=0"
 
