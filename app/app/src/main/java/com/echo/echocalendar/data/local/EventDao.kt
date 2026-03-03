@@ -53,6 +53,12 @@ interface EventDao {
     )
     suspend fun getByOccurredAtRange(start: Long, end: Long): List<EventEntity>
 
+    @Query(
+        "SELECT * FROM Event WHERE isYearlyRecurring = 1 " +
+            "ORDER BY occurredAt DESC, updatedAt DESC"
+    )
+    suspend fun getYearlyRecurringEvents(): List<EventEntity>
+
     @Query("DELETE FROM Event WHERE id = :eventId")
     suspend fun deleteById(eventId: String)
 }

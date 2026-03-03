@@ -5,7 +5,8 @@ import java.time.LocalDate
 enum class AiMode(val value: String) {
     Input("input"),
     Search("search"),
-    Refine("refine")
+    Refine("refine"),
+    Modify("modify")
 }
 
 enum class DraftField(val value: String) {
@@ -28,6 +29,7 @@ data class AiInputSuggestion(
     val intent: AiCrudIntent,
     val summary: String,
     val timeText: String,
+    val repeatYearly: Boolean?,
     val categoryId: String,
     val placeText: String,
     val body: String,
@@ -47,4 +49,21 @@ data class AiRefineSuggestion(
     val field: DraftField,
     val value: String,
     val missingRequired: List<String>
+)
+
+data class AiModifyPatch(
+    val summary: String? = null,
+    val timeText: String? = null,
+    val categoryId: String? = null,
+    val placeText: String? = null,
+    val body: String? = null,
+    val labelsText: String? = null
+)
+
+data class UsageMySummary(
+    val username: String,
+    val requestCount: Int,
+    val totalTokens: Int,
+    val avgTokensPerRequest: Double,
+    val successRate: Double
 )

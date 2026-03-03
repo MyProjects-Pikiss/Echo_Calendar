@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 
 import httpx
 
@@ -10,6 +11,19 @@ from .config import settings
 
 class LlmClientError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class LlmUsage:
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+@dataclass(frozen=True)
+class LlmCompletionResult:
+    payload: dict
+    usage: LlmUsage | None
 
 
 class OpenAILlmClient:
@@ -21,7 +35,7 @@ class OpenAILlmClient:
     def enabled(self) -> bool:
         return bool(self._api_key)
 
-    async def json_completion(self, system_prompt: str, user_prompt: str) -> dict:
+    async def json_completion(self, system_prompt: str, user_prompt: str) -> LlmCompletionResult:
         if not self.enabled:
             raise LlmClientError("OPENAI_API_KEY is not configured")
 
@@ -55,7 +69,8 @@ class OpenAILlmClient:
                         parsed = json.loads(content)
                         if not isinstance(parsed, dict):
                             raise LlmClientError("LLM response is not a JSON object")
-                        return parsed
+                        usage = _extract_usage(body.get("usage"))
+                        return LlmCompletionResult(payload=parsed, usage=usage)
                     except httpx.HTTPStatusError as exc:
                         response_preview = exc.response.text.strip().replace("\n", " ")
                         if len(response_preview) > 600:
@@ -72,3 +87,48 @@ class OpenAILlmClient:
                 f"LLM call exceeded deadline ({settings.llm_deadline_seconds}s)"
             ) from exc
         raise LlmClientError(str(last_error) if last_error else "LLM call failed")
+
+
+def _extract_usage(raw_usage: object) -> LlmUsage | None:
+    if not isinstance(raw_usage, dict):
+        return None
+    prompt_tokens = raw_usage.get("prompt_tokens")
+    completion_tokens = raw_usage.get("completion_tokens")
+    total_tokens = raw_usage.get("total_tokens")
+    input_tokens = raw_usage.get("input_tokens")
+    output_tokens = raw_usage.get("output_tokens")
+
+    in_tokens = _to_non_negative_int(input_tokens)
+    if in_tokens is None:
+        in_tokens = _to_non_negative_int(prompt_tokens)
+
+    out_tokens = _to_non_negative_int(output_tokens)
+    if out_tokens is None:
+        out_tokens = _to_non_negative_int(completion_tokens)
+
+    total = _to_non_negative_int(total_tokens)
+    if total is None and in_tokens is not None and out_tokens is not None:
+        total = in_tokens + out_tokens
+
+    if in_tokens is None and out_tokens is None and total is None:
+        return None
+
+    return LlmUsage(
+        input_tokens=in_tokens or 0,
+        output_tokens=out_tokens or 0,
+        total_tokens=total or 0,
+    )
+
+
+def _to_non_negative_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float):
+        as_int = int(value)
+        return as_int if as_int >= 0 else None
+    if isinstance(value, str) and value.strip().isdigit():
+        as_int = int(value.strip())
+        return as_int if as_int >= 0 else None
+    return None

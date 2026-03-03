@@ -1,9 +1,11 @@
 package com.echo.echocalendar.ui.demo
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.speech.RecognizerIntent
 import android.util.Log
+import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -37,6 +39,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -45,7 +49,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -58,6 +64,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -78,8 +85,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
+import com.echo.echocalendar.SettingsKeys
 import com.echo.echocalendar.data.local.CategoryDefaults
 import com.echo.echocalendar.domain.usecase.MAX_LABELS_PER_EVENT
 import java.time.DayOfWeek
@@ -92,6 +101,21 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+private const val DEFAULT_AUTO_TIME_TEXT = "09:00"
+
+private fun normalizeAutoDefaultTime(raw: String?): String {
+    val parsed = runCatching {
+        LocalTime.parse(raw?.trim().orEmpty(), DateTimeFormatter.ofPattern("H:mm"))
+    }.getOrNull() ?: return DEFAULT_AUTO_TIME_TEXT
+    return parsed.format(DateTimeFormatter.ofPattern("HH:mm"))
+}
+
+private fun parseHourMinute(timeText: String): Pair<Int, Int> {
+    val parsed = runCatching { LocalTime.parse(timeText, DateTimeFormatter.ofPattern("HH:mm")) }.getOrNull()
+        ?: return 9 to 0
+    return parsed.hour to parsed.minute
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MonthCalendarScreen(
@@ -99,7 +123,10 @@ fun MonthCalendarScreen(
     searchViewModel: SearchViewModel,
     aiSearchViewModel: SearchViewModel,
     aiAssistantService: AiAssistantService,
-    isOnline: Boolean
+    isOnline: Boolean,
+    openEventId: String? = null,
+    onOpenEventHandled: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     val zoneId = remember { ZoneId.of("Asia/Seoul") }
     val today = remember { LocalDate.now(zoneId) }
@@ -118,6 +145,8 @@ fun MonthCalendarScreen(
     var isActionPickerOpen by remember { mutableStateOf(false) }
     var activeTrigger by remember { mutableStateOf(InputTrigger.Keyboard) }
     var isSearchOpen by remember { mutableStateOf(false) }
+    var isSettingsOpen by remember { mutableStateOf(false) }
+    var isProfileOpen by remember { mutableStateOf(false) }
     var isAiSearchResultOpen by remember { mutableStateOf(false) }
     var aiSearchSuggestion by remember { mutableStateOf<AiSearchSuggestion?>(null) }
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
@@ -129,13 +158,45 @@ fun MonthCalendarScreen(
     var syncedHolidayBadges by remember { mutableStateOf<Map<LocalDate, HolidayBadge>>(emptyMap()) }
 
     val context = LocalContext.current
+    val settingsPrefs = remember(context) {
+        context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var autoDefaultTimeEnabled by remember {
+        mutableStateOf(settingsPrefs.getBoolean(SettingsKeys.KEY_AUTO_DEFAULT_TIME_ENABLED, true))
+    }
+    var autoDefaultTimeText by remember {
+        mutableStateOf(
+            normalizeAutoDefaultTime(
+                settingsPrefs.getString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, DEFAULT_AUTO_TIME_TEXT)
+            )
+        )
+    }
+    val initialAutoTime = remember(autoDefaultTimeText) { parseHourMinute(autoDefaultTimeText) }
+    var autoDefaultHour by remember { mutableIntStateOf(initialAutoTime.first) }
+    var autoDefaultMinute by remember { mutableIntStateOf(initialAutoTime.second) }
+    var alarmAlertMode by remember {
+        mutableStateOf(
+            settingsPrefs.getString(
+                SettingsKeys.KEY_ALARM_ALERT_MODE,
+                SettingsKeys.ALARM_ALERT_MODE_SOUND
+            ) ?: SettingsKeys.ALARM_ALERT_MODE_SOUND
+        )
+    }
+    var usageAccessToken by remember {
+        mutableStateOf(settingsPrefs.getString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, "").orEmpty())
+    }
+    var myUsageSummary by remember { mutableStateOf<UsageMySummary?>(null) }
+    var usageStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isUsageLoading by remember { mutableStateOf(false) }
     var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     var isListening by remember { mutableStateOf(false) }
     var partialTranscript by remember { mutableStateOf("") }
+    var lastRecognizedTranscript by remember { mutableStateOf("") }
 
     fun actionLabel(action: AiAction?): String = when (action) {
         is AiAction.Input -> "AI 입력"
         is AiAction.Search -> "AI 검색"
+        is AiAction.Modify -> "AI 수정"
         is AiAction.RefineField -> "필드 보완"
         null -> "음성 인식"
     }
@@ -147,7 +208,8 @@ fun MonthCalendarScreen(
             return
         }
         when (val action = pendingAiAction) {
-            is AiAction.Input -> {
+            is AiAction.Input, is AiAction.Modify -> {
+                val isModifyOnly = action is AiAction.Modify
                 processingAiAction = action
                 isAiProcessing = true
                 coroutineScope.launch {
@@ -157,12 +219,17 @@ fun MonthCalendarScreen(
                             selectedDate = calendarViewModel.selectedDate
                         )
                         val suggestion = result.suggestion
-                        if (result.source == AiSuggestionSource.LocalFallback) {
-                            aiStatusMessage = "AI 서버 응답을 받지 못해 로컬 보완 규칙으로 처리했어요."
+                        val wantsAlarm = wantsAlarmFromTranscript(transcript)
+                        val wantsYearlyRecurring = wantsYearlyRecurringFromTranscript(transcript)
+                        val suggestionRepeatYearly = suggestion.repeatYearly ?: if (wantsYearlyRecurring) true else null
+                        val isAutoTimeApplied = autoDefaultTimeEnabled && suggestion.timeText.isBlank()
+                        val resolvedTimeText = suggestion.timeText.trim().ifBlank {
+                            if (autoDefaultTimeEnabled) String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute) else ""
                         }
                         val suggestionDraft = EventDraft(
                             summary = suggestion.summary,
-                            timeText = suggestion.timeText,
+                            timeText = resolvedTimeText,
+                            isYearlyRecurring = suggestionRepeatYearly ?: false,
                             categoryId = normalizeCategoryIdOrNull(suggestion.categoryId) ?: "other",
                             placeText = suggestion.placeText,
                             body = suggestion.body,
@@ -177,14 +244,25 @@ fun MonthCalendarScreen(
 
                         when (suggestion.intent) {
                             AiCrudIntent.Create -> {
+                                if (isModifyOnly) {
+                                    aiErrorMessage = "AI 수정에서는 수정/삭제 요청만 처리할 수 있어요. 예: '내일 회의 내용 바꿔줘', '내일 회의 삭제해줘'"
+                                    return@launch
+                                }
                                 pendingEdit = PendingEdit(
                                     action = CrudAction.Create,
                                     eventId = null,
                                     date = suggestion.date,
-                                    draft = suggestionDraft
+                                    draft = suggestionDraft,
+                                    alarmEnabled = wantsAlarm,
+                                    rawInputText = transcript
                                 )
                                 isCategoryMenuOpen = false
-                                editError = suggestion.missingRequired
+                                val missingRequired = if (isAutoTimeApplied) {
+                                    suggestion.missingRequired.filterNot { it.trim() == "시간" }
+                                } else {
+                                    suggestion.missingRequired
+                                }
+                                editError = missingRequired
                                     .takeIf { it.isNotEmpty() }
                                     ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
                             }
@@ -196,25 +274,47 @@ fun MonthCalendarScreen(
                                 }
                                 val dateTime = Instant.ofEpochMilli(target.occurredAt).atZone(zoneId).toLocalDateTime()
                                 val existingLabels = calendarViewModel.labelsByEventId[target.id].orEmpty()
+                                val existingAlarmEnabled = calendarViewModel.alarmEnabledByEventId[target.id] == true
+                                val existingDraft = EventDraft(
+                                    summary = target.summary,
+                                    timeText = timeFormatter.format(dateTime),
+                                    isYearlyRecurring = target.isYearlyRecurring,
+                                    categoryId = target.categoryId,
+                                    placeText = target.placeText.orEmpty(),
+                                    body = target.body,
+                                    labelsText = existingLabels.joinToString(", ")
+                                )
                                 pendingEdit = PendingEdit(
                                     action = CrudAction.Update,
                                     eventId = target.id,
                                     date = dateTime.toLocalDate(),
-                                    draft = mergeDraftForUpdate(
-                                        existing = EventDraft(
-                                            summary = target.summary,
-                                            timeText = timeFormatter.format(dateTime),
-                                            categoryId = target.categoryId,
-                                            placeText = target.placeText.orEmpty(),
-                                            body = target.body,
-                                            labelsText = existingLabels.joinToString(", ")
-                                        ),
-                                        suggestion = suggestionDraft
-                                    )
+                                    draft = if (isModifyOnly) {
+                                        buildDraftForModify(
+                                            transcript = transcript,
+                                            existing = existingDraft,
+                                            selectedDate = dateTime.toLocalDate(),
+                                            aiAssistantService = aiAssistantService,
+                                            currentRawText = calendarViewModel.rawInputByEventId[target.id]
+                                        )
+                                    } else {
+                                        mergeDraftForUpdate(
+                                            existing = existingDraft,
+                                            suggestion = suggestionDraft,
+                                            repeatYearlyOverride = suggestionRepeatYearly
+                                        )
+                                    },
+                                    alarmEnabled = if (wantsAlarm) true else existingAlarmEnabled,
+                                    originalDraft = existingDraft,
+                                    originalAlarmEnabled = existingAlarmEnabled,
+                                    rawInputText = transcript
                                 )
                                 isCategoryMenuOpen = false
                                 editError = null
-                                aiStatusMessage = "수정 후보를 찾았어요. 확인 후 반영해 주세요."
+                                aiStatusMessage = if (isModifyOnly) {
+                                    "수정 후보를 찾았어요. 확인 후 반영해 주세요."
+                                } else {
+                                    "수정 후보를 찾았어요. 확인 후 반영해 주세요."
+                                }
                             }
                             AiCrudIntent.Delete -> {
                                 val target = findBestTargetEvent(candidates, suggestion.summary, suggestion.body)
@@ -226,6 +326,12 @@ fun MonthCalendarScreen(
                                 aiStatusMessage = "삭제 후보를 찾았어요. 확인 후 삭제해 주세요."
                             }
                         }
+                    } catch (error: AiRemoteException) {
+                        aiErrorMessage = error.userMessage
+                        aiStatusMessage = null
+                    } catch (_: Exception) {
+                        aiErrorMessage = "AI 기능을 사용할 수 없어요. 인터넷 연결 또는 서버 상태를 확인해 주세요."
+                        aiStatusMessage = null
                     } finally {
                         isAiProcessing = false
                         processingAiAction = null
@@ -248,12 +354,15 @@ fun MonthCalendarScreen(
                             aiErrorMessage = "검색어를 만들지 못했어요. 다시 말해 주세요."
                             return@launch
                         }
-                        if (result.source == AiSuggestionSource.LocalFallback) {
-                            aiStatusMessage = "AI 서버 응답 실패로 로컬 규칙 검색을 적용했어요."
-                        }
                         aiSearchSuggestion = suggestion
                         aiSearchViewModel.applyAiSearchSuggestion(suggestion)
                         isAiSearchResultOpen = true
+                    } catch (error: AiRemoteException) {
+                        aiErrorMessage = error.userMessage
+                        aiStatusMessage = null
+                    } catch (_: Exception) {
+                        aiErrorMessage = "AI 기능을 사용할 수 없어요. 인터넷 연결 또는 서버 상태를 확인해 주세요."
+                        aiStatusMessage = null
                     } finally {
                         isAiProcessing = false
                         processingAiAction = null
@@ -283,12 +392,13 @@ fun MonthCalendarScreen(
                             editError = refined.missingRequired
                                 .takeIf { it.isNotEmpty() }
                                 ?.joinToString(prefix = "필수 항목을 채워주세요: ", separator = ", ")
-                            aiStatusMessage = if (result.source == AiSuggestionSource.Remote) {
-                                "AI 서버가 ${fieldLabel(action.field)} 항목 보완을 완료했어요."
-                            } else {
-                                val reason = result.fallbackReason?.takeIf { it.isNotBlank() }?.let { " (사유: $it)" }.orEmpty()
-                                "AI 서버 보완에 실패해 로컬 규칙으로 반영했어요.$reason"
-                            }
+                            aiStatusMessage = "AI 서버가 ${fieldLabel(action.field)} 항목 보완을 완료했어요."
+                        } catch (error: AiRemoteException) {
+                            aiErrorMessage = error.userMessage
+                            aiStatusMessage = null
+                        } catch (_: Exception) {
+                            aiErrorMessage = "AI 기능을 사용할 수 없어요. 인터넷 연결 또는 서버 상태를 확인해 주세요."
+                            aiStatusMessage = null
                         } finally {
                             isAiProcessing = false
                             processingAiAction = null
@@ -317,6 +427,9 @@ fun MonthCalendarScreen(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguageTag)
             putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 5000L)
         }
         speechRecognizer?.startListening(speechIntent)
         isListening = true
@@ -356,7 +469,8 @@ fun MonthCalendarScreen(
                         ?.firstOrNull()
                         ?.trim()
                         .orEmpty()
-                    partialTranscript = ""
+                    lastRecognizedTranscript = transcript
+                    partialTranscript = transcript
                     handleRecognizedTranscript(transcript)
                 }
 
@@ -429,24 +543,37 @@ fun MonthCalendarScreen(
         calendarViewModel.onMonthShown(shownMonth)
     }
 
+    LaunchedEffect(calendarViewModel.selectedDate) {
+        val selectedMonth = YearMonth.from(calendarViewModel.selectedDate)
+        if (shownMonth != selectedMonth) {
+            shownMonth = selectedMonth
+        }
+    }
+
     LaunchedEffect(selectedEvent?.id) {
         selectedEvent?.let { event ->
             calendarViewModel.loadLabelsForEvent(event.id)
         }
     }
 
-    LaunchedEffect(Unit) {
-        val synced = HolidaySyncStore.refreshAndLoad(context)
-        syncedHolidayBadges = synced.associate { item ->
-            item.date to HolidayBadge(
-                label = item.label,
-                kind = if (item.kind == SyncedHolidayKind.PUBLIC_HOLIDAY) {
-                    HolidayKind.PublicHoliday
-                } else {
-                    HolidayKind.Commemorative
-                }
-            )
+    LaunchedEffect(openEventId) {
+        val eventId = openEventId ?: return@LaunchedEffect
+        calendarViewModel.openEventById(eventId) { event ->
+            if (event != null) {
+                selectedEvent = event
+            } else {
+                aiErrorMessage = "알림으로 연 이벤트를 찾지 못했어요."
+            }
+            onOpenEventHandled()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        val cached = HolidaySyncStore.loadCachedOnly(context)
+        syncedHolidayBadges = toHolidayBadgeMap(cached)
+
+        val refreshed = HolidaySyncStore.refreshAndLoad(context)
+        syncedHolidayBadges = toHolidayBadgeMap(refreshed)
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -475,8 +602,15 @@ fun MonthCalendarScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = { isProfileOpen = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "프로필"
+                    )
+                }
                 Row(
                     modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { shownMonth = shownMonth.minusMonths(1) }) {
@@ -491,13 +625,21 @@ fun MonthCalendarScreen(
                         Text(text = "▶")
                     }
                 }
-                TextButton(
-                    onClick = {
-                        shownMonth = YearMonth.from(today)
-                        calendarViewModel.onDateSelected(today)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = {
+                            shownMonth = YearMonth.from(today)
+                            calendarViewModel.onDateSelected(today)
+                        }
+                    ) {
+                        Text(text = "오늘")
                     }
-                ) {
-                    Text(text = "오늘")
+                    IconButton(onClick = { isSettingsOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "설정"
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -655,11 +797,13 @@ fun MonthCalendarScreen(
                                     draft = EventDraft(
                                         summary = "",
                                         timeText = "09:00",
+                                        isYearlyRecurring = false,
                                         categoryId = "other",
                                         placeText = "",
                                         body = "",
                                         labelsText = ""
-                                    )
+                                    ),
+                                    alarmEnabled = false
                                 )
                                 isActionPickerOpen = false
                             },
@@ -705,28 +849,38 @@ fun MonthCalendarScreen(
                                     )
                                 }
                             }
-                            if (partialTranscript.isNotBlank()) {
+                            val displayTranscript = when {
+                                partialTranscript.isNotBlank() -> partialTranscript
+                                isAiProcessing -> lastRecognizedTranscript
+                                else -> ""
+                            }
+                            if (displayTranscript.isNotBlank()) {
                                 Text(
-                                    text = "인식된 음성: $partialTranscript",
+                                    text = "인식된 음성: $displayTranscript",
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                                 )
                             }
-                            ActionPickerRow(
+                            ActionPickerRowThree(
                                 firstLabel = "AI 입력",
                                 firstIcon = Icons.Default.Mic,
                                 secondLabel = "AI 검색",
                                 secondIcon = Icons.Default.Search,
+                                thirdLabel = "AI 수정",
+                                thirdIcon = Icons.Default.Edit,
                                 onFirstActionSelected = {
                                     triggerVoiceAction(AiAction.Input)
                                 },
                                 onSecondActionSelected = {
                                     triggerVoiceAction(AiAction.Search)
+                                },
+                                onThirdActionSelected = {
+                                    triggerVoiceAction(AiAction.Modify)
                                 }
                             )
                             if (!isOnline) {
                                 Text(
-                                    text = "오프라인 상태에서는 AI 입력/검색을 사용할 수 없어요.",
+                                    text = "오프라인 상태에서는 AI 입력/검색/수정을 사용할 수 없어요.",
                                     color = MaterialTheme.colorScheme.error,
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -797,6 +951,305 @@ fun MonthCalendarScreen(
                 isJumpDialogOpen = false
             }
         )
+    }
+
+    if (isProfileOpen) {
+        LaunchedEffect(isProfileOpen) {
+            usageAccessToken = settingsPrefs.getString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, "").orEmpty()
+            if (usageAccessToken.isNotBlank()) {
+                isUsageLoading = true
+                try {
+                    myUsageSummary = aiAssistantService.fetchMyUsage(usageAccessToken)
+                    usageStatusMessage = "내 사용량을 불러왔어요."
+                } catch (error: AiRemoteException) {
+                    usageStatusMessage = error.userMessage
+                    myUsageSummary = null
+                } catch (_: Exception) {
+                    usageStatusMessage = "사용량 정보를 불러오지 못했어요."
+                    myUsageSummary = null
+                } finally {
+                    isUsageLoading = false
+                }
+            } else {
+                myUsageSummary = null
+            }
+        }
+        Dialog(onDismissRequest = { isProfileOpen = false }) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 240.dp, max = 560.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "프로필",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    myUsageSummary?.let { summary ->
+                        Text("계정: ${summary.username}", style = MaterialTheme.typography.bodyLarge)
+                        Text("요청 수: ${summary.requestCount}", style = MaterialTheme.typography.bodyMedium)
+                        Text("총 토큰: ${summary.totalTokens}", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "평균 토큰/요청: ${"%.1f".format(summary.avgTokensPerRequest)}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            "성공률: ${"%.1f".format(summary.successRate * 100)}%",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } ?: run {
+                        Text(
+                            text = "계정 정보를 불러오지 못했어요.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (isUsageLoading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text("조회 중...")
+                        }
+                    }
+                    usageStatusMessage?.let { msg ->
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                    ) {
+                        TextButton(
+                            onClick = {
+                                if (usageAccessToken.isBlank()) {
+                                    usageStatusMessage = "로그인 토큰이 없어요."
+                                    return@TextButton
+                                }
+                                coroutineScope.launch {
+                                    isUsageLoading = true
+                                    try {
+                                        myUsageSummary = aiAssistantService.fetchMyUsage(usageAccessToken)
+                                        usageStatusMessage = "내 사용량 갱신 완료"
+                                    } catch (error: AiRemoteException) {
+                                        usageStatusMessage = error.userMessage
+                                        myUsageSummary = null
+                                    } catch (_: Exception) {
+                                        usageStatusMessage = "사용량 조회에 실패했어요."
+                                        myUsageSummary = null
+                                    } finally {
+                                        isUsageLoading = false
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("새로고침")
+                        }
+                        TextButton(
+                            onClick = {
+                                settingsPrefs.edit()
+                                    .remove(SettingsKeys.KEY_USAGE_ACCESS_TOKEN)
+                                    .apply()
+                                isProfileOpen = false
+                                onLogout()
+                            }
+                        ) {
+                            Text("로그아웃")
+                        }
+                        TextButton(onClick = { isProfileOpen = false }) {
+                            Text("닫기")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (isSettingsOpen) {
+        LaunchedEffect(isSettingsOpen) {
+            val normalized = normalizeAutoDefaultTime(
+                settingsPrefs.getString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, DEFAULT_AUTO_TIME_TEXT)
+            )
+            autoDefaultTimeText = normalized
+            val (hour, minute) = parseHourMinute(normalized)
+            autoDefaultHour = hour
+            autoDefaultMinute = minute
+        }
+        Dialog(onDismissRequest = { isSettingsOpen = false }) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 260.dp, max = 620.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "설정",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "자동 시간",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "AI 입력에서 시간이 비면 09:00을 자동 입력",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = autoDefaultTimeEnabled,
+                            onCheckedChange = { enabled ->
+                                autoDefaultTimeEnabled = enabled
+                                settingsPrefs.edit()
+                                    .putBoolean(SettingsKeys.KEY_AUTO_DEFAULT_TIME_ENABLED, enabled)
+                                    .apply()
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                NumberPicker(ctx).apply {
+                                    minValue = 0
+                                    maxValue = 23
+                                    wrapSelectorWheel = true
+                                    setFormatter { value -> String.format("%02d", value) }
+                                }
+                            },
+                            update = { picker ->
+                                picker.value = autoDefaultHour
+                                picker.setOnValueChangedListener { _, _, newValue ->
+                                    autoDefaultHour = newValue
+                                    val normalized = String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute)
+                                    autoDefaultTimeText = normalized
+                                    settingsPrefs.edit()
+                                        .putString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, normalized)
+                                        .apply()
+                                }
+                                picker.isEnabled = autoDefaultTimeEnabled
+                            },
+                            modifier = Modifier.width(96.dp)
+                        )
+                        Text(
+                            text = ":",
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        AndroidView(
+                            factory = { ctx ->
+                                NumberPicker(ctx).apply {
+                                    minValue = 0
+                                    maxValue = 59
+                                    wrapSelectorWheel = true
+                                    setFormatter { value -> String.format("%02d", value) }
+                                }
+                            },
+                            update = { picker ->
+                                picker.value = autoDefaultMinute
+                                picker.setOnValueChangedListener { _, _, newValue ->
+                                    autoDefaultMinute = newValue
+                                    val normalized = String.format("%02d:%02d", autoDefaultHour, autoDefaultMinute)
+                                    autoDefaultTimeText = normalized
+                                    settingsPrefs.edit()
+                                        .putString(SettingsKeys.KEY_AUTO_DEFAULT_TIME_TEXT, normalized)
+                                        .apply()
+                                }
+                                picker.isEnabled = autoDefaultTimeEnabled
+                            },
+                            modifier = Modifier.width(96.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "알림 방식",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "이벤트 알림의 사운드/진동 동작을 선택",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AlarmModeTile(
+                                label = "사운드",
+                                selected = alarmAlertMode == SettingsKeys.ALARM_ALERT_MODE_SOUND,
+                                onSelect = {
+                                    alarmAlertMode = SettingsKeys.ALARM_ALERT_MODE_SOUND
+                                    settingsPrefs.edit()
+                                        .putString(SettingsKeys.KEY_ALARM_ALERT_MODE, alarmAlertMode)
+                                        .apply()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            AlarmModeTile(
+                                label = "진동",
+                                selected = alarmAlertMode == SettingsKeys.ALARM_ALERT_MODE_VIBRATE,
+                                onSelect = {
+                                    alarmAlertMode = SettingsKeys.ALARM_ALERT_MODE_VIBRATE
+                                    settingsPrefs.edit()
+                                        .putString(SettingsKeys.KEY_ALARM_ALERT_MODE, alarmAlertMode)
+                                        .apply()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            AlarmModeTile(
+                                label = "무음",
+                                selected = alarmAlertMode == SettingsKeys.ALARM_ALERT_MODE_SILENT,
+                                onSelect = {
+                                    alarmAlertMode = SettingsKeys.ALARM_ALERT_MODE_SILENT
+                                    settingsPrefs.edit()
+                                        .putString(SettingsKeys.KEY_ALARM_ALERT_MODE, alarmAlertMode)
+                                        .apply()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                    ) {
+                        TextButton(onClick = { isSettingsOpen = false }) {
+                            Text(text = "닫기")
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (isSearchOpen) {
@@ -913,10 +1366,13 @@ fun MonthCalendarScreen(
                                 date = editState.date,
                                 time = parsedTime,
                                 categoryId = editState.draft.categoryId.trim(),
+                                isYearlyRecurring = editState.draft.isYearlyRecurring,
                                 summary = summary,
                                 body = body,
                                 placeText = placeText,
-                                labels = labels
+                                labels = labels,
+                                alarmEnabled = editState.alarmEnabled,
+                                rawInputText = editState.rawInputText
                             )
                         }
                         CrudAction.Update -> {
@@ -926,10 +1382,13 @@ fun MonthCalendarScreen(
                                 date = editState.date,
                                 time = parsedTime,
                                 categoryId = editState.draft.categoryId.trim(),
+                                isYearlyRecurring = editState.draft.isYearlyRecurring,
                                 summary = summary,
                                 body = body,
                                 placeText = placeText,
-                                labels = labels
+                                labels = labels,
+                                alarmEnabled = editState.alarmEnabled,
+                                rawInputText = editState.rawInputText
                             )
                         }
                         CrudAction.Delete -> return@Button
@@ -960,6 +1419,36 @@ fun MonthCalendarScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(text = "날짜: ${editState.date.format(dateFormatter)}")
+                    if (editState.action == CrudAction.Update) {
+                        val changes = updateChangesPreview(editState)
+                        Text(
+                            text = "변경 예정",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        if (changes.isEmpty()) {
+                            Text(
+                                text = "현재 변경된 항목이 없습니다.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                changes.forEach { change ->
+                                    Text(
+                                        text = change.label,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Text(
+                                        text = "변경 전: ${change.before}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = "변경 후: ${change.after}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = editState.draft.summary,
                         onValueChange = {
@@ -1002,6 +1491,40 @@ fun MonthCalendarScreen(
                         },
                         singleLine = true
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "알림",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(
+                            checked = editState.alarmEnabled,
+                            onCheckedChange = { enabled ->
+                                pendingEdit = editState.copy(alarmEnabled = enabled)
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "매년 반복",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(
+                            checked = editState.draft.isYearlyRecurring,
+                            onCheckedChange = { enabled ->
+                                pendingEdit = editState.copy(
+                                    draft = editState.draft.copy(isYearlyRecurring = enabled)
+                                )
+                            }
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { isCategoryMenuOpen = true }) {
                             val selectedCategory = CategoryDefaults.categories
@@ -1172,18 +1695,25 @@ fun MonthCalendarScreen(
                             .atZone(zoneId)
                             .toLocalDateTime()
                         val labels = calendarViewModel.labelsByEventId[event.id].orEmpty()
+                        val existingAlarmEnabled = calendarViewModel.alarmEnabledByEventId[event.id] == true
+                        val existingDraft = EventDraft(
+                            summary = event.summary,
+                            timeText = timeFormatter.format(eventDateTime),
+                            isYearlyRecurring = event.isYearlyRecurring,
+                            categoryId = event.categoryId,
+                            placeText = event.placeText.orEmpty(),
+                            body = event.body,
+                            labelsText = labels.joinToString(", ")
+                        )
                         pendingEdit = PendingEdit(
                             action = CrudAction.Update,
                             eventId = event.id,
                             date = eventDateTime.toLocalDate(),
-                            draft = EventDraft(
-                                summary = event.summary,
-                                timeText = timeFormatter.format(eventDateTime),
-                                categoryId = event.categoryId,
-                                placeText = event.placeText.orEmpty(),
-                                body = event.body,
-                                labelsText = labels.joinToString(", ")
-                            )
+                            draft = existingDraft,
+                            alarmEnabled = existingAlarmEnabled,
+                            originalDraft = existingDraft,
+                            originalAlarmEnabled = existingAlarmEnabled,
+                            rawInputText = calendarViewModel.rawInputByEventId[event.id]
                         )
                         isCategoryMenuOpen = false
                         editError = null
@@ -1230,6 +1760,9 @@ fun MonthCalendarScreen(
                     Text(text = "장소: ${event.placeText ?: "없음"}")
                     Text(text = "라벨: ${labels.joinToString(", ").ifBlank { "없음" }}")
                     Text(text = "내용: ${event.body.ifBlank { "없음" }}")
+                    Text(text = "반복: ${if (event.isYearlyRecurring) "매년" else "반복 안 함"}")
+                    Text(text = "원문: ${calendarViewModel.rawInputByEventId[event.id]?.ifBlank { "없음" } ?: "없음"}")
+                    Text(text = "알림: ${if (calendarViewModel.alarmEnabledByEventId[event.id] == true) "켜짐" else "꺼짐"}")
                     Text(text = "생성: ${createdAt.format(dateFormatter)} ${createdAt.format(timeFormatter)}")
                     Text(text = "수정: ${updatedAt.format(dateFormatter)} ${updatedAt.format(timeFormatter)}")
                 }
@@ -1271,6 +1804,45 @@ private fun ActionChoiceTile(
 }
 
 @Composable
+private fun AlarmModeTile(
+    label: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .height(56.dp)
+            .clickable { onSelect() },
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = if (selected) 2.dp else 0.dp,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+            }
+        )
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        }
+    }
+}
+
+@Composable
 private fun ActionPickerRow(
     firstLabel: String,
     firstIcon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -1302,6 +1874,58 @@ private fun ActionPickerRow(
             label = secondLabel,
             icon = secondIcon,
             onClick = onSecondActionSelected,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ActionPickerRowThree(
+    firstLabel: String,
+    firstIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    secondLabel: String,
+    secondIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    thirdLabel: String,
+    thirdIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    onFirstActionSelected: () -> Unit,
+    onSecondActionSelected: () -> Unit,
+    onThirdActionSelected: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .padding(12.dp)
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActionChoiceTile(
+            label = firstLabel,
+            icon = firstIcon,
+            onClick = onFirstActionSelected,
+            modifier = Modifier.weight(1f)
+        )
+        HorizontalDivider(
+            modifier = Modifier
+                .height(48.dp)
+                .width(1.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
+        ActionChoiceTile(
+            label = secondLabel,
+            icon = secondIcon,
+            onClick = onSecondActionSelected,
+            modifier = Modifier.weight(1f)
+        )
+        HorizontalDivider(
+            modifier = Modifier
+                .height(48.dp)
+                .width(1.dp),
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        )
+        ActionChoiceTile(
+            label = thirdLabel,
+            icon = thirdIcon,
+            onClick = onThirdActionSelected,
             modifier = Modifier.weight(1f)
         )
     }
@@ -1348,6 +1972,7 @@ private enum class InputTrigger {
 private sealed interface AiAction {
     data object Input : AiAction
     data object Search : AiAction
+    data object Modify : AiAction
     data class RefineField(val field: DraftField) : AiAction
 }
 
@@ -1360,6 +1985,7 @@ private enum class CrudAction {
 private data class EventDraft(
     val summary: String,
     val timeText: String,
+    val isYearlyRecurring: Boolean,
     val categoryId: String,
     val placeText: String,
     val body: String,
@@ -1370,7 +1996,11 @@ private data class PendingEdit(
     val action: CrudAction,
     val eventId: String?,
     val date: LocalDate,
-    val draft: EventDraft
+    val draft: EventDraft,
+    val alarmEnabled: Boolean,
+    val originalDraft: EventDraft? = null,
+    val originalAlarmEnabled: Boolean? = null,
+    val rawInputText: String? = null
 )
 
 private data class DraftValidationResult(
@@ -1448,15 +2078,158 @@ private fun candidateEventsForDate(
     }
 }
 
-private fun mergeDraftForUpdate(existing: EventDraft, suggestion: EventDraft): EventDraft {
+private fun mergeDraftForUpdate(
+    existing: EventDraft,
+    suggestion: EventDraft,
+    repeatYearlyOverride: Boolean? = null
+): EventDraft {
     return existing.copy(
         summary = suggestion.summary.trim().ifBlank { existing.summary },
         timeText = suggestion.timeText.trim().ifBlank { existing.timeText },
+        isYearlyRecurring = repeatYearlyOverride ?: existing.isYearlyRecurring,
         categoryId = suggestion.categoryId.trim().ifBlank { existing.categoryId },
         placeText = suggestion.placeText.trim().ifBlank { existing.placeText },
         body = suggestion.body.trim().ifBlank { existing.body },
         labelsText = suggestion.labelsText.trim().ifBlank { existing.labelsText }
     )
+}
+
+private suspend fun buildDraftForModify(
+    transcript: String,
+    existing: EventDraft,
+    selectedDate: LocalDate,
+    aiAssistantService: AiAssistantService,
+    currentRawText: String?
+): EventDraft {
+    val patchResult = aiAssistantService.suggestModifyPatch(
+        transcript = transcript,
+        selectedDate = selectedDate,
+        currentSummary = existing.summary,
+        currentTimeText = existing.timeText,
+        currentCategoryId = existing.categoryId,
+        currentPlaceText = existing.placeText,
+        currentBody = existing.body,
+        currentLabelsText = existing.labelsText,
+        currentRawText = currentRawText
+    )
+    val patch = patchResult.suggestion
+
+    return existing.copy(
+        summary = patch.summary ?: existing.summary,
+        timeText = patch.timeText ?: existing.timeText,
+        categoryId = patch.categoryId ?: existing.categoryId,
+        placeText = patch.placeText ?: existing.placeText,
+        body = patch.body ?: existing.body,
+        labelsText = patch.labelsText ?: existing.labelsText
+    )
+}
+
+private data class UpdateChange(
+    val label: String,
+    val before: String,
+    val after: String
+)
+
+private fun updateChangesPreview(editState: PendingEdit): List<UpdateChange> {
+    if (editState.action != CrudAction.Update) return emptyList()
+    val original = editState.originalDraft ?: return emptyList()
+    val now = editState.draft
+    val changes = mutableListOf<UpdateChange>()
+
+    if (original.summary.trim() != now.summary.trim()) {
+        changes += UpdateChange(
+            label = "제목",
+            before = previewValue(original.summary),
+            after = previewValue(now.summary)
+        )
+    }
+    if (original.timeText.trim() != now.timeText.trim()) {
+        changes += UpdateChange(
+            label = "시간",
+            before = previewValue(original.timeText),
+            after = previewValue(now.timeText)
+        )
+    }
+    if (original.isYearlyRecurring != now.isYearlyRecurring) {
+        changes += UpdateChange(
+            label = "반복",
+            before = if (original.isYearlyRecurring) "\"매년\"" else "\"반복 안 함\"",
+            after = if (now.isYearlyRecurring) "\"매년\"" else "\"반복 안 함\""
+        )
+    }
+    if (original.categoryId.trim() != now.categoryId.trim()) {
+        changes += UpdateChange(
+            label = "카테고리",
+            before = previewCategory(original.categoryId),
+            after = previewCategory(now.categoryId)
+        )
+    }
+    if (original.placeText.trim() != now.placeText.trim()) {
+        changes += UpdateChange(
+            label = "장소",
+            before = previewValue(original.placeText),
+            after = previewValue(now.placeText)
+        )
+    }
+    if (original.labelsText.trim() != now.labelsText.trim()) {
+        changes += UpdateChange(
+            label = "라벨",
+            before = previewValue(original.labelsText),
+            after = previewValue(now.labelsText)
+        )
+    }
+    if (original.body.trim() != now.body.trim()) {
+        changes += UpdateChange(
+            label = "내용",
+            before = previewValue(original.body),
+            after = previewValue(now.body)
+        )
+    }
+
+    val originalAlarmEnabled = editState.originalAlarmEnabled
+    if (originalAlarmEnabled != null && originalAlarmEnabled != editState.alarmEnabled) {
+        changes += UpdateChange(
+            label = "알림",
+            before = if (originalAlarmEnabled) "켜짐" else "꺼짐",
+            after = if (editState.alarmEnabled) "켜짐" else "꺼짐"
+        )
+    }
+    return changes
+}
+
+private fun previewValue(value: String): String {
+    val normalized = value.trim().ifBlank { "없음" }
+    return "\"$normalized\""
+}
+
+private fun previewCategory(categoryId: String): String {
+    val normalized = categoryId.trim().ifBlank { "other" }
+    val display = CategoryDefaults.categories
+        .firstOrNull { it.id == normalized }
+        ?.displayName
+        ?: normalized
+    return "\"$display\""
+}
+
+private fun wantsAlarmFromTranscript(transcript: String): Boolean {
+    if (transcript.isBlank()) return false
+    val normalized = transcript.lowercase()
+    return normalized.contains("알려줘") ||
+        normalized.contains("알림") ||
+        normalized.contains("알람") ||
+        normalized.contains("깨워줘") ||
+        normalized.contains("리마인드")
+}
+
+private fun wantsYearlyRecurringFromTranscript(transcript: String): Boolean {
+    if (transcript.isBlank()) return false
+    val normalized = transcript.lowercase()
+    return normalized.contains("생일") ||
+        normalized.contains("매년") ||
+        normalized.contains("해마다") ||
+        normalized.contains("매 해") ||
+        normalized.contains("birthday") ||
+        normalized.contains("anniversary")
 }
 
 private fun findBestTargetEvent(
@@ -1519,6 +2292,19 @@ private fun holidayBadge(
     syncedHolidayBadges: Map<LocalDate, HolidayBadge>
 ): HolidayBadge? {
     return syncedHolidayBadges[date]
+}
+
+private fun toHolidayBadgeMap(items: List<SyncedHoliday>): Map<LocalDate, HolidayBadge> {
+    return items.associate { item ->
+        item.date to HolidayBadge(
+            label = item.label,
+            kind = if (item.kind == SyncedHolidayKind.PUBLIC_HOLIDAY) {
+                HolidayKind.PublicHoliday
+            } else {
+                HolidayKind.Commemorative
+            }
+        )
+    }
 }
 
 @Composable
@@ -1761,10 +2547,9 @@ private fun MonthJumpDialog(
     onConfirm: (Int, Int) -> Unit
 ) {
     val years = remember {
-        val currentYear = initialMonth.year
-        (currentYear - 50..currentYear + 50).toList()
+        (1970..2080).toList()
     }
-    var selectedYear by remember { mutableIntStateOf(initialMonth.year) }
+    var selectedYear by remember { mutableIntStateOf(initialMonth.year.coerceIn(1970, 2080)) }
     var selectedMonth by remember { mutableIntStateOf(initialMonth.monthValue) }
     var yearExpanded by remember { mutableStateOf(false) }
     var monthExpanded by remember { mutableStateOf(false) }

@@ -23,3 +23,18 @@ local.properties
 # Local tooling artifacts
 .gradle-local/
 tools/__pycache__/
+
+# Local IDE state (nested Android project)
+app/.idea/
+
+# Local runtime/config artifacts (do not commit)
+server/logs/
+server/backend/data/
+
+# Local virtualenvs
+server/backend/.venv/
+server/backend/.venv-linux/
+
+# Python cache under server tools
+server/tools/__pycache__/
+server/tools/**/*.pyc

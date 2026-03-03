@@ -2,6 +2,8 @@ package com.echo.echocalendar.ui.demo
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import com.echo.echocalendar.BuildConfig
 import java.net.HttpURLConnection
@@ -29,10 +31,8 @@ object HolidaySyncStore {
     private const val PREFS_NAME = "holiday_sync"
     private const val KEY_BODY = "body"
     private const val KEY_LAST_CHECKED_AT = "last_checked_at"
-    private const val KEY_HAS_BOOTSTRAP_SYNC = "has_bootstrap_sync"
-    private const val BOOTSTRAP_START_DATE = "1970-01-01"
-    private const val BOOTSTRAP_FORWARD_YEARS = 5L
-    private const val WINDOW_YEARS = 1L
+    private const val FULL_SYNC_START_DATE = "1970-01-01"
+    private const val FULL_SYNC_END_DATE = "2080-12-31"
 
     private data class FetchResult(
         val startDate: LocalDate,
@@ -40,10 +40,18 @@ object HolidaySyncStore {
         val holidays: List<SyncedHoliday>
     )
 
+    suspend fun loadCachedOnly(context: Context): List<SyncedHoliday> = withContext(Dispatchers.IO) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        loadCached(prefs)
+    }
+
     suspend fun refreshAndLoad(context: Context): List<SyncedHoliday> = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cached = loadCached(prefs)
-        val fetched = fetchFromRemote(prefs)
+        if (!isInternetAvailable(context)) {
+            return@withContext cached
+        }
+        val fetched = fetchFromRemote()
         if (fetched == null) return@withContext cached
 
         val merged = mergeHolidays(
@@ -56,22 +64,12 @@ object HolidaySyncStore {
         merged
     }
 
-    private fun fetchFromRemote(prefs: SharedPreferences): FetchResult? {
+    private fun fetchFromRemote(): FetchResult? {
         val syncUrl = BuildConfig.HOLIDAY_SYNC_URL.trim()
         if (syncUrl.isBlank()) return null
 
-        val today = LocalDate.now()
-        val hasBootstrap = prefs.getBoolean(KEY_HAS_BOOTSTRAP_SYNC, false)
-        val startDate = if (hasBootstrap) {
-            today.minusYears(WINDOW_YEARS)
-        } else {
-            LocalDate.parse(BOOTSTRAP_START_DATE)
-        }
-        val endDate = if (hasBootstrap) {
-            today.plusYears(WINDOW_YEARS)
-        } else {
-            today.plusYears(BOOTSTRAP_FORWARD_YEARS)
-        }
+        val startDate = LocalDate.parse(FULL_SYNC_START_DATE)
+        val endDate = LocalDate.parse(FULL_SYNC_END_DATE)
         val requestUrl = buildRangeUrl(syncUrl, startDate, endDate)
 
         val connection = (URL(requestUrl).openConnection() as HttpURLConnection).apply {
@@ -86,14 +84,9 @@ object HolidaySyncStore {
                 HttpURLConnection.HTTP_OK -> {
                     val body = connection.inputStream.bufferedReader().use { it.readText() }
                     val parsed = parseBody(body)
-                    prefs.edit()
-                        .putBoolean(KEY_HAS_BOOTSTRAP_SYNC, true)
-                        .putLong(KEY_LAST_CHECKED_AT, System.currentTimeMillis())
-                        .apply()
-                    val mode = if (hasBootstrap) "window" else "bootstrap"
                     Log.i(
                         TAG,
-                        "holiday_sync_success mode=$mode range=${startDate}..${endDate} count=${parsed.size}"
+                        "holiday_sync_success mode=launch_full range=${startDate}..${endDate} count=${parsed.size}"
                     )
                     return FetchResult(
                         startDate = startDate,
@@ -111,6 +104,15 @@ object HolidaySyncStore {
             connection.disconnect()
         }
         return null
+    }
+
+    private fun isInternetAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val activeNetwork = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     private fun buildRangeUrl(baseUrl: String, startDate: LocalDate, endDate: LocalDate): String {

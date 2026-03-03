@@ -4,7 +4,12 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .models import InputInterpretResponse, RefineFieldResponse, SearchInterpretResponse
+from .models import (
+    InputInterpretResponse,
+    ModifyInterpretResponse,
+    RefineFieldResponse,
+    SearchInterpretResponse,
+)
 from .prompts import KNOWN_CATEGORY_IDS
 
 
@@ -46,6 +51,8 @@ def ensure_input_response(raw: dict[str, Any], transcript: str, selected_date: s
     candidate["date"] = _trimmed_text(candidate.get("date")) or selected_date
     candidate["summary"] = (_trimmed_text(candidate.get("summary")) or transcript[:25]).strip() or "일정"
     candidate["time"] = _normalize_time(_trimmed_text(candidate.get("time")))
+    repeat_yearly_raw = candidate.get("repeatYearly")
+    candidate["repeatYearly"] = repeat_yearly_raw if isinstance(repeat_yearly_raw, bool) else None
     category_id = _trimmed_text(candidate.get("categoryId")) or "other"
     candidate["categoryId"] = category_id if category_id in KNOWN_CATEGORY_IDS else "other"
     candidate["placeText"] = _trimmed_text(candidate.get("placeText"))
@@ -95,5 +102,38 @@ def ensure_refine_response(raw: dict[str, Any], field: str, current_value: str) 
     candidate["missingRequired"] = _normalize_string_list(candidate.get("missingRequired"))
     try:
         return RefineFieldResponse.model_validate(candidate)
+    except ValidationError as exc:
+        raise ContractValidationError(str(exc)) from exc
+
+
+def ensure_modify_response(raw: dict[str, Any], transcript: str) -> ModifyInterpretResponse:
+    candidate = dict(raw)
+    candidate["mode"] = "modify"
+
+    summary = _trimmed_text(candidate.get("summary"))
+    candidate["summary"] = summary or None
+
+    time = _normalize_time(_trimmed_text(candidate.get("time")))
+    candidate["time"] = time or None
+
+    category_id = _trimmed_text(candidate.get("categoryId"))
+    candidate["categoryId"] = category_id if category_id in KNOWN_CATEGORY_IDS else None
+
+    place_text = _trimmed_text(candidate.get("placeText"))
+    candidate["placeText"] = place_text or None
+
+    body = _trimmed_text(candidate.get("body"))
+    candidate["body"] = body or None
+
+    labels_raw = candidate.get("labels")
+    labels = _normalize_string_list(labels_raw)
+    if labels_raw is None:
+        candidate["labels"] = None
+    else:
+        candidate["labels"] = labels
+    candidate["missingRequired"] = _normalize_string_list(candidate.get("missingRequired"))
+
+    try:
+        return ModifyInterpretResponse.model_validate(candidate)
     except ValidationError as exc:
         raise ContractValidationError(str(exc)) from exc

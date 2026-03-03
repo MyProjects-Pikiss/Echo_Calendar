@@ -62,3 +62,24 @@ def test_search_success_includes_labels():
     data = response.json()
     assert data["mode"] == "search"
     assert "labels" in data
+
+
+def test_modify_success_includes_patch_fields():
+    response = client.post(
+        "/ai/modify-interpret",
+        json={
+            "mode": "modify",
+            "transcript": "시간을 3시 30분으로 바꿔줘",
+            "selectedDate": "2026-02-11",
+            "currentSummary": "회의",
+            "currentTime": "09:00",
+            "currentCategoryId": "work",
+            "currentPlaceText": "",
+            "currentBody": "",
+            "currentLabels": [],
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "modify"
+    assert "time" in data

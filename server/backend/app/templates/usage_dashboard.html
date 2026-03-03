@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echo Calendar 사용량 대시보드</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #152033;
+      --muted: #657286;
+      --line: #d7dee8;
+      --accent: #1367d1;
+      --danger: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #dfe9ff, transparent 35%), var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", sans-serif;
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      letter-spacing: -0.4px;
+    }
+    .desc {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 6px 24px rgba(13, 24, 45, 0.06);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    input, select, button {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0 10px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+    input { min-width: 220px; }
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--line);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .metric .k {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .metric .v {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .status.error { color: var(--danger); }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 900px;
+      background: #fff;
+    }
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      font-size: 13px;
+    }
+    th {
+      background: #f8fbff;
+      color: #3a4b62;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    td.transcript {
+      max-width: 430px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .outlier-list {
+      margin: 0;
+      padding-left: 16px;
+      color: var(--muted);
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      input { min-width: 170px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Echo Calendar 사용량 대시보드</h1>
+    <p class="desc">회원별 토큰/요청/성공률, 입력 내용(Transcript), 전체 평균과 이상치를 확인합니다.</p>
+
+    <section class="card">
+      <div class="row">
+        <input id="username" placeholder="아이디" />
+        <input id="password" type="password" placeholder="비밀번호" />
+        <button id="loginBtn">로그인</button>
+        <button id="signupBtn" class="secondary">회원가입</button>
+        <button id="refreshBtn" class="secondary">새로고침</button>
+      </div>
+      <div class="status" id="authStatus">로그인 필요</div>
+    </section>
+
+    <section class="card">
+      <div class="grid">
+        <div class="metric"><div class="k">전체 요청 수</div><div class="v" id="mRequestCount">-</div></div>
+        <div class="metric"><div class="k">전체 토큰 합</div><div class="v" id="mTotalTokens">-</div></div>
+        <div class="metric"><div class="k">요청당 평균 토큰</div><div class="v" id="mAvgTokens">-</div></div>
+        <div class="metric"><div class="k">성공률</div><div class="v" id="mSuccessRate">-</div></div>
+      </div>
+      <div class="status" id="overviewStatus"></div>
+      <div style="margin-top: 10px;">
+        <strong>사용자 평균 총 토큰:</strong> <span id="userAvgTotal">-</span>
+      </div>
+      <div style="margin-top: 8px;">
+        <strong>이상치 사용자:</strong>
+        <ul id="outliers" class="outlier-list"></ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <label for="userSelect">사용자 선택</label>
+        <select id="userSelect"></select>
+        <button id="detailBtn" class="secondary">상세 조회</button>
+      </div>
+      <div class="grid">
+        <div class="metric"><div class="k">사용자 요청 수</div><div class="v" id="uRequestCount">-</div></div>
+        <div class="metric"><div class="k">사용자 토큰 합</div><div class="v" id="uTotalTokens">-</div></div>
+        <div class="metric"><div class="k">요청당 평균 토큰</div><div class="v" id="uAvgTokens">-</div></div>
+        <div class="metric"><div class="k">성공률</div><div class="v" id="uSuccessRate">-</div></div>
+      </div>
+      <div class="status" id="detailStatus"></div>
+      <div class="table-wrap" style="margin-top: 10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>시간</th>
+              <th>엔드포인트</th>
+              <th>모델</th>
+              <th>성공</th>
+              <th>입력 토큰</th>
+              <th>출력 토큰</th>
+              <th>총 토큰</th>
+              <th>지연(ms)</th>
+              <th>입력 내용</th>
+              <th>오류</th>
+            </tr>
+          </thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <strong>계정 관리</strong>
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <input id="newUserName" placeholder="새 아이디" />
+        <input id="newUserPassword" type="password" placeholder="새 비밀번호" />
+        <select id="newUserRole">
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+        <button id="createUserBtn">계정 생성</button>
+      </div>
+      <div class="status" id="usersStatus"></div>
+      <div class="table-wrap" style="margin-top: 10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>아이디</th>
+              <th>권한</th>
+              <th>생성시각</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      token: localStorage.getItem("echo_usage_token") || "",
+      users: [],
+    };
+
+    const byId = (id) => document.getElementById(id);
+    const fmtInt = (n) => new Intl.NumberFormat("ko-KR").format(Number(n || 0));
+    const fmtPct = (v) => `${(Number(v || 0) * 100).toFixed(1)}%`;
+    const esc = (v) => String(v || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+    const fmtTime = (ms) => {
+      const d = new Date(Number(ms || 0));
+      if (Number.isNaN(d.getTime())) return "-";
+      return d.toLocaleString("ko-KR");
+    };
+
+    async function api(path) {
+      const res = await fetch(path, {
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function apiJson(path, method, body) {
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (state.token) {
+        headers.Authorization = `Bearer ${state.token}`;
+      }
+      const res = await fetch(path, {
+        method,
+        headers,
+        body: JSON.stringify(body || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    function setStatus(id, message, isError = false) {
+      const el = byId(id);
+      el.textContent = message;
+      el.className = isError ? "status error" : "status";
+    }
+
+    function renderOverview(data) {
+      byId("mRequestCount").textContent = fmtInt(data.requestCount);
+      byId("mTotalTokens").textContent = fmtInt(data.totalTokens);
+      byId("mAvgTokens").textContent = Number(data.avgTokensPerRequest || 0).toFixed(1);
+      byId("mSuccessRate").textContent = fmtPct(data.successRate);
+      byId("userAvgTotal").textContent = fmtInt(data.userAverageTotalTokens || 0);
+
+      state.users = data.users || [];
+      const select = byId("userSelect");
+      select.innerHTML = "";
+      for (const user of state.users) {
+        const opt = document.createElement("option");
+        opt.value = user.userId || "";
+        opt.textContent = `${user.username} (${fmtInt(user.totalTokens)} tokens)`;
+        select.appendChild(opt);
+      }
+      if (!select.options.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "데이터 없음";
+        select.appendChild(opt);
+      }
+
+      const outliers = byId("outliers");
+      outliers.innerHTML = "";
+      const outlierItems = data.outliers || [];
+      if (!outlierItems.length) {
+        const li = document.createElement("li");
+        li.textContent = "이상치 없음";
+        outliers.appendChild(li);
+      } else {
+        for (const item of outlierItems) {
+          const li = document.createElement("li");
+          li.textContent = `${item.username}: ${fmtInt(item.totalTokens)} tokens, 성공률 ${fmtPct(item.successRate)}`;
+          outliers.appendChild(li);
+        }
+      }
+    }
+
+    function renderUserDetail(data) {
+      byId("uRequestCount").textContent = fmtInt(data.requestCount);
+      byId("uTotalTokens").textContent = fmtInt(data.totalTokens);
+      byId("uAvgTokens").textContent = Number(data.avgTokensPerRequest || 0).toFixed(1);
+      byId("uSuccessRate").textContent = fmtPct(data.successRate);
+
+      const tbody = byId("eventsBody");
+      tbody.innerHTML = "";
+      const events = data.events || [];
+      if (!events.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="10">이 사용자의 로그가 없습니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      for (const e of events) {
+        const tr = document.createElement("tr");
+        const err = [e.errorCode, e.errorMessage].filter(Boolean).join(" / ");
+        tr.innerHTML = `
+          <td>${fmtTime(e.createdAt)}</td>
+          <td>${esc(e.endpoint || "-")}</td>
+          <td>${esc(e.model || "-")}</td>
+          <td>${e.success ? "Y" : "N"}</td>
+          <td>${fmtInt(e.inputTokens)}</td>
+          <td>${fmtInt(e.outputTokens)}</td>
+          <td>${fmtInt(e.totalTokens)}</td>
+          <td>${fmtInt(e.latencyMs)}</td>
+          <td class="transcript">${esc(e.transcript)}</td>
+          <td>${esc(err || "-")}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderUsersTable(users) {
+      const tbody = byId("usersBody");
+      tbody.innerHTML = "";
+      if (!users || !users.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="4">계정이 없습니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      for (const user of users) {
+        const tr = document.createElement("tr");
+        const canDelete = Boolean(user.id);
+        tr.innerHTML = `
+          <td>${esc(user.username)}</td>
+          <td>${esc(user.role || "user")}</td>
+          <td>${fmtTime(user.createdAt)}</td>
+          <td>${canDelete ? `<button class="secondary" data-del-id="${esc(user.id)}" data-del-name="${esc(user.username)}">삭제</button>` : "-"}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      for (const btn of tbody.querySelectorAll("button[data-del-id]")) {
+        btn.addEventListener("click", async (event) => {
+          const target = event.currentTarget;
+          const userId = target.getAttribute("data-del-id") || "";
+          const username = target.getAttribute("data-del-name") || "unknown";
+          const ok = confirm(`계정 '${username}' 을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.`);
+          if (!ok) return;
+          try {
+            await fetchUserDelete(userId);
+            setStatus("usersStatus", `계정 삭제 완료: ${username}`);
+            await reloadAll();
+          } catch (err) {
+            setStatus("usersStatus", `계정 삭제 실패: ${err.message}`, true);
+          }
+        });
+      }
+    }
+
+    async function loadOverview() {
+      try {
+        const data = await api("/usage/overview");
+        renderOverview(data);
+        setStatus("overviewStatus", "개요 데이터 로드 완료");
+      } catch (err) {
+        setStatus("overviewStatus", `개요 로드 실패: ${err.message}`, true);
+      }
+    }
+
+    async function loadDetail() {
+      const userId = byId("userSelect").value;
+      const query = userId ? `?userId=${encodeURIComponent(userId)}&limit=150` : "?limit=150";
+      try {
+        const data = await api(`/usage/user-detail${query}`);
+        renderUserDetail(data);
+        setStatus("detailStatus", `상세 로드 완료: ${data.username || "unknown"}`);
+      } catch (err) {
+        setStatus("detailStatus", `상세 로드 실패: ${err.message}`, true);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await api("/usage/users");
+        renderUsersTable(data.users || []);
+        setStatus("usersStatus", "계정 목록 로드 완료");
+      } catch (err) {
+        setStatus("usersStatus", `계정 목록 로드 실패: ${err.message}`, true);
+      }
+    }
+
+    async function fetchUserCreate() {
+      const username = byId("newUserName").value.trim();
+      const password = byId("newUserPassword").value.trim();
+      const role = byId("newUserRole").value.trim() || "user";
+      if (!username || !password) {
+        throw new Error("아이디/비밀번호를 입력하세요.");
+      }
+      await apiJson("/usage/users", "POST", { username, password, role });
+      byId("newUserPassword").value = "";
+    }
+
+    async function fetchUserDelete(userId) {
+      const headers = state.token ? { Authorization: `Bearer ${state.token}` } : {};
+      const res = await fetch(`/usage/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function reloadAll() {
+      await loadOverview();
+      await loadUsers();
+      await loadDetail();
+    }
+
+    async function loginOrSignup(path) {
+      const username = byId("username").value.trim();
+      const password = byId("password").value.trim();
+      if (!username || !password) {
+        setStatus("authStatus", "아이디/비밀번호를 입력하세요.", true);
+        return;
+      }
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
+        state.token = data.accessToken || "";
+        localStorage.setItem("echo_usage_token", state.token);
+        setStatus("authStatus", `인증 성공: ${data.user?.username || username}`);
+        await reloadAll();
+      } catch (err) {
+        setStatus("authStatus", `인증 실패: ${err.message}`, true);
+      }
+    }
+
+    byId("loginBtn").addEventListener("click", async () => { await loginOrSignup("/auth/login"); });
+    byId("signupBtn").addEventListener("click", async () => { await loginOrSignup("/auth/signup"); });
+    byId("refreshBtn").addEventListener("click", async () => {
+      await reloadAll();
+    });
+    byId("detailBtn").addEventListener("click", async () => { await loadDetail(); });
+    byId("createUserBtn").addEventListener("click", async () => {
+      try {
+        await fetchUserCreate();
+        setStatus("usersStatus", "계정 생성 완료");
+        await reloadAll();
+      } catch (err) {
+        setStatus("usersStatus", `계정 생성 실패: ${err.message}`, true);
+      }
+    });
+
+    if (state.token) {
+      setStatus("authStatus", "저장된 토큰으로 조회 시도 중...");
+      reloadAll();
+    }
+  </script>
+</body>
+</html>

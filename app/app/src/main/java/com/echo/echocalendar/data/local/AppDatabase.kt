@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         LabelEntity::class,
         EventLabelCrossRef::class,
         EventFtsEntity::class,
-        EventAlarmEntity::class
+        EventAlarmEntity::class,
+        EventRawInputEntity::class
     ],
-    version = 6,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,4 +23,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun labelDao(): LabelDao
     abstract fun eventLabelDao(): EventLabelDao
     abstract fun eventAlarmDao(): EventAlarmDao
+    abstract fun eventRawInputDao(): EventRawInputDao
 }

@@ -22,6 +22,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug Kotlin sources
+        working-directory: app
         env:
           AI_API_BASE_URL_DEBUG: ${{ secrets.AI_API_BASE_URL_DEBUG }}
           AI_API_BASE_URL_RELEASE: ${{ secrets.AI_API_BASE_URL_RELEASE }}
@@ -35,6 +36,7 @@ jobs:
             -PAI_API_KEY_RELEASE="${AI_API_KEY_RELEASE}"
 
       - name: Verify AI backend contract against local stub
+        working-directory: server
         run: |
           python tools/ai_contract_server.py >/tmp/ai_stub.log 2>&1 &
           STUB_PID=$!

@@ -23,6 +23,7 @@ object AiAssistantInterpreter {
             intent = intent,
             summary = summary,
             timeText = timeText,
+            repeatYearly = detectYearlyRecurring(normalized),
             categoryId = categoryId,
             placeText = placeText,
             body = normalized,
@@ -112,6 +113,12 @@ object AiAssistantInterpreter {
                 normalized.contains("고쳐") -> AiCrudIntent.Update
             else -> AiCrudIntent.Create
         }
+    }
+
+    private fun detectYearlyRecurring(source: String): Boolean? {
+        val normalized = source.lowercase()
+        val yearlyTokens = listOf("생일", "매년", "해마다", "매 해", "anniversary", "birthday")
+        return if (yearlyTokens.any { normalized.contains(it) }) true else null
     }
 
     private fun extractCategoryId(source: String): String {

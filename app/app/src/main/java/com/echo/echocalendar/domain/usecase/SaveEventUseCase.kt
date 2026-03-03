@@ -13,6 +13,7 @@ class SaveEventUseCase(
     suspend operator fun invoke(
         categoryId: String,
         occurredAt: Long,
+        isYearlyRecurring: Boolean,
         summary: String,
         body: String,
         placeText: String?,
@@ -24,6 +25,7 @@ class SaveEventUseCase(
             id = eventId,
             categoryId = categoryId,
             occurredAt = occurredAt,
+            isYearlyRecurring = isYearlyRecurring,
             summary = summary,
             placeText = placeText,
             body = body,

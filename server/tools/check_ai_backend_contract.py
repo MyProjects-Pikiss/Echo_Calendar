@@ -63,7 +63,7 @@ def main() -> int:
     if status != 200:
         failures.append(f"[input] expected 200, got {status}: {data}")
     else:
-        failures.extend(expect_keys("input", data, ["mode", "summary", "time", "categoryId", "body", "missingRequired"]))
+        failures.extend(expect_keys("input", data, ["mode", "intent", "summary", "time", "repeatYearly", "categoryId", "body", "missingRequired"]))
         if data.get("mode") != "input":
             failures.append(f"[input] mode mismatch: {data.get('mode')}")
     if show_response:
@@ -106,6 +106,32 @@ def main() -> int:
             failures.append(f"[refine] mode mismatch: {data.get('mode')}")
     if show_response:
         print("[response][refine]")
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+
+    status, data = post_json(
+        args.base_url,
+        "/ai/modify-interpret",
+        {
+            "mode": "modify",
+            "transcript": "시간을 3시 30분으로 바꿔줘",
+            "selectedDate": "2026-02-11",
+            "currentSummary": "팀 회의",
+            "currentTime": "09:00",
+            "currentCategoryId": "work",
+            "currentPlaceText": "",
+            "currentBody": "",
+            "currentLabels": [],
+        },
+        args.timeout,
+    )
+    if status != 200:
+        failures.append(f"[modify] expected 200, got {status}: {data}")
+    else:
+        failures.extend(expect_keys("modify", data, ["mode", "summary", "time", "categoryId", "placeText", "body", "labels", "missingRequired"]))
+        if data.get("mode") != "modify":
+            failures.append(f"[modify] mode mismatch: {data.get('mode')}")
+    if show_response:
+        print("[response][modify]")
         print(json.dumps(data, ensure_ascii=False, indent=2))
 
     if failures:

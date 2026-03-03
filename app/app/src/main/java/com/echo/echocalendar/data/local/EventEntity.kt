@@ -28,6 +28,7 @@ data class EventEntity(
     @PrimaryKey val id: String,
     val categoryId: String,
     val occurredAt: Long,
+    val isYearlyRecurring: Boolean = false,
     val summary: String,
     val placeText: String?,
     val body: String,

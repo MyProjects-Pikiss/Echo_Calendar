@@ -14,6 +14,14 @@ class GetEventsByDateUseCase(
     ): List<EventEntity> {
         val start = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
         val end = date.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
-        return database.eventDao().getByOccurredAtRange(start, end)
+        val directEvents = database.eventDao().getByOccurredAtRange(start, end)
+        val recurringSources = database.eventDao().getYearlyRecurringEvents()
+        val recurringEvents = materializeYearlyRecurringForDate(
+            recurringEvents = recurringSources,
+            targetDate = date,
+            zoneId = zoneId
+        ).filter { recurring -> directEvents.none { it.id == recurring.id } }
+        return (directEvents + recurringEvents)
+            .sortedWith(compareByDescending<EventEntity> { it.occurredAt }.thenByDescending { it.updatedAt })
     }
 }

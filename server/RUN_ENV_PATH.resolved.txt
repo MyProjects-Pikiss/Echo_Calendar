@@ -1,0 +1,1 @@
+OPENAI_ENV_FILE=C:\Users\wnstk\SERVER_ENV_TEMPLATE.env

@@ -67,21 +67,38 @@ class AiAssistantInterpreterTest {
     }
 
     @Test
-    fun assistantService_fallsBackWhenApiUnavailable() = runBlocking {
+    fun assistantService_throwsWhenApiUnavailable() = runBlocking {
         val service = AiAssistantService(
             apiGateway = object : AiApiGateway {
                 override suspend fun interpretInput(transcript: String, selectedDate: LocalDate) = null
                 override suspend fun interpretSearch(transcript: String) = null
+                override suspend fun interpretModify(
+                    transcript: String,
+                    selectedDate: LocalDate,
+                    currentSummary: String,
+                    currentTime: String,
+                    currentCategoryId: String,
+                    currentPlaceText: String,
+                    currentBody: String,
+                    currentLabels: List<String>
+                ) = null
                 override suspend fun refineField(
                     transcript: String,
                     field: DraftField,
                     currentValue: String,
                     selectedDate: LocalDate
                 ) = null
+                override suspend fun usageSignup(username: String, password: String) = null
+                override suspend fun usageLogin(username: String, password: String) = null
+                override suspend fun myUsage(accessToken: String) = null
             }
         )
 
-        val suggestion = service.suggestSearch("회의 검색")
-        assertEquals("회의", suggestion.suggestion.query)
+        try {
+            service.suggestSearch("회의 검색")
+            throw AssertionError("AiRemoteException expected")
+        } catch (error: AiRemoteException) {
+            assertTrue(error.userMessage.isNotBlank())
+        }
     }
 }

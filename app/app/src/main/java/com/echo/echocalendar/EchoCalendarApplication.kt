@@ -17,6 +17,7 @@ class EchoCalendarApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.eventAlarmScheduler.ensureNotificationChannels()
         applicationScope.launch {
             DebugSeedData.ensureDefaultCategories(container.database)
         }

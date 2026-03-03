@@ -45,6 +45,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/ai/refine-field":
             self._handle_refine(payload)
             return
+        if self.path == "/ai/modify-interpret":
+            self._handle_modify(payload)
+            return
 
         self._json_response(404, ErrorPayload("unknown", "NOT_FOUND", f"Unsupported path: {self.path}").as_dict())
 
@@ -72,9 +75,11 @@ class Handler(BaseHTTPRequestHandler):
             200,
             {
                 "mode": "input",
+                "intent": "create",
                 "date": selected_date,
                 "summary": summary or "",
                 "time": time,
+                "repeatYearly": "생일" in transcript or "매년" in transcript,
                 "categoryId": "other",
                 "placeText": "",
                 "body": transcript,
@@ -147,6 +152,34 @@ class Handler(BaseHTTPRequestHandler):
                 "field": field,
                 "value": refined,
                 "missingRequired": ["time"] if field == "time" and not refined else [],
+            },
+        )
+
+    def _handle_modify(self, payload: dict[str, Any]) -> None:
+        mode = str(payload.get("mode", ""))
+        transcript = str(payload.get("transcript", "")).strip()
+
+        if mode != "modify":
+            return self._json_response(422, ErrorPayload("modify", "MODE_MISMATCH", "mode must be 'modify'").as_dict())
+        if not transcript:
+            return self._json_response(422, ErrorPayload("modify", "MISSING_TRANSCRIPT", "transcript is required").as_dict())
+
+        labels = []
+        for matched in _extract_hashtags(transcript):
+            if matched not in labels:
+                labels.append(matched)
+
+        self._json_response(
+            200,
+            {
+                "mode": "modify",
+                "summary": transcript[:40] if "제목" in transcript else None,
+                "time": _extract_time(transcript) if ("시간" in transcript or "시" in transcript) else None,
+                "categoryId": "medical" if "병원" in transcript else None,
+                "placeText": transcript if "장소" in transcript else None,
+                "body": transcript if "내용" in transcript else None,
+                "labels": labels if labels else None,
+                "missingRequired": [],
             },
         )
 

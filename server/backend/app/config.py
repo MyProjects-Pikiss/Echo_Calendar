@@ -41,10 +41,11 @@ _load_local_env_files()
 
 @dataclass(frozen=True)
 class Settings:
+    server_mode: str = os.getenv("SERVER_MODE", "all").strip().lower()
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8088"))
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip()
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5-nano").strip()
     llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "12"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
     llm_deadline_seconds: float = float(os.getenv("LLM_DEADLINE_SECONDS", "15"))
@@ -63,6 +64,11 @@ class Settings:
     holiday_api_timeout_seconds: float = float(os.getenv("KOREA_HOLIDAY_API_TIMEOUT_SECONDS", "8"))
     holiday_api_max_concurrency: int = int(os.getenv("KOREA_HOLIDAY_API_MAX_CONCURRENCY", "6"))
     holiday_db_path: str = os.getenv("HOLIDAY_DB_PATH", "data/holiday_cache.db").strip()
+    usage_db_path: str = os.getenv("USAGE_DB_PATH", "data/usage.db").strip()
+    usage_dashboard_owner_username: str = os.getenv("USAGE_DASHBOARD_OWNER_USERNAME", "").strip()
+    usage_dashboard_access_key: str = os.getenv("USAGE_DASHBOARD_ACCESS_KEY", "").strip()
+    usage_admin_username: str = os.getenv("USAGE_ADMIN_USERNAME", "").strip()
+    usage_admin_password: str = os.getenv("USAGE_ADMIN_PASSWORD", "").strip()
     holiday_sync_enabled: bool = os.getenv("HOLIDAY_SYNC_ENABLED", "true").lower() in {
         "1",
         "true",

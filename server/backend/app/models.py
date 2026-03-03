@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-AiMode = Literal["input", "search", "refine"]
+AiMode = Literal["input", "search", "refine", "modify"]
 DraftField = Literal["summary", "time", "category", "place", "labels", "body"]
 CrudIntent = Literal["create", "update", "delete"]
 
@@ -15,6 +15,7 @@ class InputInterpretRequest(BaseModel):
     mode: AiMode
     transcript: str = Field(min_length=1)
     selectedDate: str
+    userId: str | None = None
 
     @field_validator("selectedDate")
     @classmethod
@@ -29,6 +30,7 @@ class InputInterpretResponse(BaseModel):
     date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     summary: str = Field(min_length=1)
     time: str = Field(default="", pattern=r"^$|^\d{2}:\d{2}$")
+    repeatYearly: bool | None = None
     categoryId: str = "other"
     placeText: str = ""
     body: str = Field(min_length=1)
@@ -51,6 +53,7 @@ class InputInterpretResponse(BaseModel):
 class SearchInterpretRequest(BaseModel):
     mode: AiMode
     transcript: str = Field(min_length=1)
+    userId: str | None = None
 
 
 class SearchInterpretResponse(BaseModel):
@@ -76,6 +79,7 @@ class RefineFieldRequest(BaseModel):
     field: DraftField
     currentValue: str = ""
     selectedDate: str
+    userId: str | None = None
 
     @field_validator("selectedDate")
     @classmethod
@@ -99,10 +103,64 @@ class RefineFieldResponse(BaseModel):
         return self
 
 
+class ModifyInterpretRequest(BaseModel):
+    mode: AiMode
+    transcript: str = Field(min_length=1)
+    selectedDate: str
+    userId: str | None = None
+    currentSummary: str = ""
+    currentTime: str = ""
+    currentCategoryId: str = ""
+    currentPlaceText: str = ""
+    currentBody: str = ""
+    currentLabels: list[str] = []
+
+    @field_validator("selectedDate")
+    @classmethod
+    def validate_selected_date(cls, value: str) -> str:
+        _require_iso_date(value)
+        return value
+
+    @field_validator("currentTime")
+    @classmethod
+    def validate_current_time(cls, value: str) -> str:
+        _require_hhmm_or_empty(value)
+        return value
+
+
+class ModifyInterpretResponse(BaseModel):
+    mode: Literal["modify"] = "modify"
+    summary: str | None = None
+    time: str | None = None
+    categoryId: str | None = None
+    placeText: str | None = None
+    body: str | None = None
+    labels: list[str] | None = None
+    missingRequired: list[str] = []
+
+    @field_validator("time")
+    @classmethod
+    def validate_time(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        _require_hhmm_or_empty(value)
+        return value
+
+
 class StableErrorResponse(BaseModel):
     mode: AiMode
     errorCode: str
     message: str
+
+
+class AuthSignupRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class AuthLoginRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=6, max_length=128)
 
 
 def _require_iso_date(value: str) -> None:

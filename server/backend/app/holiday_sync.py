@@ -8,7 +8,6 @@ from .config import settings
 from .holiday_client import HolidayClientError, HolidayItem, fetch_holiday_items
 from .holiday_store import (
     StoredHoliday,
-    has_any_holiday_data,
     get_holidays_in_range,
     get_state,
     init_holiday_db,
@@ -98,12 +97,4 @@ async def run_startup_sync(db_path: Path) -> HolidaySyncResult | None:
 
 async def ensure_range_loaded(db_path: Path, start: date, end: date) -> list[StoredHoliday]:
     init_holiday_db(db_path)
-    loaded = get_holidays_in_range(db_path, start, end)
-    if loaded:
-        return loaded
-    if has_any_holiday_data(db_path):
-        return loaded
-    if not settings.holiday_api_key:
-        raise HolidaySyncError("KOREA_HOLIDAY_API_KEY is required")
-    await sync_holidays_range(db_path=db_path, start=start, end=end)
     return get_holidays_in_range(db_path, start, end)
