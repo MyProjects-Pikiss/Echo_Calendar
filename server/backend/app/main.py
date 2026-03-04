@@ -8,9 +8,11 @@ import time
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from .config import settings
@@ -32,6 +34,7 @@ from .holiday_sync import ensure_range_loaded
 from .llm_client import LlmClientError, LlmUsage, OpenAILlmClient
 from .logging_utils import logger, mask_text
 from .models import (
+    AppVersionCheckResponse,
     AuthLoginRequest,
     AuthSignupRequest,
     DraftField,
@@ -65,27 +68,35 @@ llm_client = OpenAILlmClient()
 rate_limiter = SimpleRateLimiter(max_requests=settings.rate_limit_per_minute, window_seconds=60)
 holiday_db_path = Path(settings.holiday_db_path)
 usage_db_path = Path(settings.usage_db_path)
+server_root_path = Path(__file__).resolve().parents[2]
+downloads_dir = Path(settings.app_downloads_dir)
+if not downloads_dir.is_absolute():
+    downloads_dir = server_root_path / downloads_dir
+downloads_dir.mkdir(parents=True, exist_ok=True)
 dashboard_html_path = Path(__file__).resolve().parent / "templates" / "usage_dashboard.html"
 _usage_event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(maxsize=5000)
 _usage_worker_task: asyncio.Task[None] | None = None
+app.mount("/downloads", StaticFiles(directory=str(downloads_dir), check_dir=False), name="downloads")
 
 
 def _is_path_enabled(path: str) -> bool:
     # Allow docs/health in every mode for operability.
-    if path in {"/", "/health", "/openapi.json", "/docs", "/redoc"}:
+    if path in {"/", "/health", "/openapi.json", "/docs", "/redoc"} or path.startswith("/downloads"):
         return True
     mode = settings.server_mode.strip().lower()
     if mode in {"", "all"}:
         return True
     if mode == "ai":
         return (
-            path.startswith("/ai/")
+            path.startswith("/app/")
+            or path.startswith("/ai/")
             or path.startswith("/auth/")
             or path.startswith("/usage/me")
         )
     if mode == "core":
         return (
-            path.startswith("/auth/")
+            path.startswith("/app/")
+            or path.startswith("/auth/")
             or path.startswith("/usage/")
             or path.startswith("/holidays")
         )
@@ -217,6 +228,20 @@ def _record_ai_usage(
         logger.warning("usage_queue_full dropped endpoint=%s", endpoint)
 
 
+def _resolve_app_apk_download_url(request: Request) -> str | None:
+    explicit_url = settings.app_apk_download_url.strip()
+    if explicit_url:
+        return explicit_url
+    apk_file_name = Path(settings.app_apk_filename.strip()).name
+    if not apk_file_name:
+        return None
+    apk_path = downloads_dir / apk_file_name
+    if not apk_path.is_file():
+        return None
+    encoded_name = quote(apk_file_name)
+    return f"{str(request.base_url).rstrip('/')}/downloads/{encoded_name}"
+
+
 async def _usage_worker() -> None:
     while True:
         event = await _usage_event_queue.get()
@@ -262,8 +287,30 @@ async def health() -> dict[str, Any]:
     return {"status": "ok", "llmEnabled": llm_client.enabled, "model": settings.openai_model}
 
 
+@app.get("/app/version")
+async def app_version(request: Request, currentVersionCode: int = 0) -> JSONResponse:
+    latest_version_code = max(1, settings.app_latest_version_code)
+    min_supported_version_code = max(1, settings.app_min_supported_version_code)
+    latest_version_name = settings.app_latest_version_name.strip() or str(latest_version_code)
+
+    has_update = currentVersionCode < latest_version_code
+    required = currentVersionCode < min_supported_version_code
+
+    response = AppVersionCheckResponse(
+        hasUpdate=has_update,
+        required=required,
+        latestVersionCode=latest_version_code,
+        latestVersionName=latest_version_name,
+        minSupportedVersionCode=min_supported_version_code,
+        apkDownloadUrl=_resolve_app_apk_download_url(request),
+    )
+    return JSONResponse(status_code=200, content=response.model_dump())
+
+
 @app.post("/auth/signup")
 async def auth_signup(request: Request) -> JSONResponse:
+    if not settings.allow_signup:
+        return stable_error("auth", "SIGNUP_DISABLED", "signup is temporarily disabled", status=403)
     payload, parse_error = _parse_json_payload(await request.body(), "auth")
     if parse_error:
         return parse_error

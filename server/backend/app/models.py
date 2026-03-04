@@ -163,6 +163,15 @@ class AuthLoginRequest(BaseModel):
     password: str = Field(min_length=6, max_length=128)
 
 
+class AppVersionCheckResponse(BaseModel):
+    hasUpdate: bool
+    required: bool
+    latestVersionCode: int = Field(ge=1)
+    latestVersionName: str = Field(min_length=1)
+    minSupportedVersionCode: int = Field(ge=1)
+    apkDownloadUrl: str | None = None
+
+
 def _require_iso_date(value: str) -> None:
     try:
         date.fromisoformat(value.strip())

@@ -9,6 +9,19 @@ import org.json.JSONException
 class AiAssistantService(
     private val apiGateway: AiApiGateway
 ) {
+    suspend fun checkAppUpdate(currentVersionCode: Int): AppUpdateInfo? {
+        val remote = runCatching { apiGateway.checkAppUpdate(currentVersionCode) }
+        val info = remote.getOrNull()
+        if (info != null) {
+            logRemoteSuccess("app.version")
+            return info
+        }
+        val failure = remote.exceptionOrNull()
+        val reason = normalizeFailureReason(failure)
+        logRemoteFailure("app.version", reason, failure)
+        return null
+    }
+
     suspend fun suggestInput(transcript: String, selectedDate: LocalDate): AiSuggestionResult<AiInputSuggestion> {
         return requestRemote("input") {
             apiGateway.interpretInput(transcript, selectedDate)

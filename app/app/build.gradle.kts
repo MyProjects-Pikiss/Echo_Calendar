@@ -1,4 +1,5 @@
 import org.gradle.api.Project
+import java.io.File
 
 plugins {
     alias(libs.plugins.android.application)
@@ -22,60 +23,41 @@ fun Project.booleanProperty(name: String, defaultValue: Boolean): Boolean {
     }
 }
 
-fun Project.expandServerPath(raw: String): String {
-    val userProfile = System.getenv("USERPROFILE").orEmpty()
-    val homeDrive = System.getenv("HOMEDRIVE").orEmpty()
-    val homePath = System.getenv("HOMEPATH").orEmpty()
-    var value = raw.trim().removeSurrounding("\"").removeSurrounding("'")
-    if (userProfile.isNotBlank()) value = value.replace("%USERPROFILE%", userProfile)
-    if (homeDrive.isNotBlank()) value = value.replace("%HOMEDRIVE%", homeDrive)
-    if (homePath.isNotBlank()) value = value.replace("%HOMEPATH%", homePath)
-    return value
-}
-
-fun Project.toBuildHostPath(path: String): String {
-    val isWindows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
-    if (isWindows) return path
-    val windowsPath = Regex("""^([A-Za-z]):\\(.*)$""").find(path) ?: return path
-    val drive = windowsPath.groupValues[1].lowercase()
-    val rest = windowsPath.groupValues[2].replace("\\", "/")
-    return "/mnt/$drive/$rest"
-}
-
-fun File.firstConfigValue(validKeys: Set<String>): String? {
-    if (!isFile) return null
-    return useLines { lines ->
-        lines
-            .map { it.trim() }
-            .firstNotNullOfOrNull { line ->
-                if (line.isBlank() || line.startsWith("#")) return@firstNotNullOfOrNull null
-                if ("=" in line) {
-                    val key = line.substringBefore("=").trim()
-                    if (key in validKeys) line.substringAfter("=").trim() else null
-                } else {
-                    line
-                }
+fun File.readKeyValueConfig(): Map<String, String> {
+    if (!isFile) return emptyMap()
+    return buildMap {
+        useLines { lines ->
+            lines.map { it.trim() }.forEach { line ->
+                if (line.isBlank() || line.startsWith("#")) return@forEach
+                val delimiter = line.indexOf("=")
+                if (delimiter <= 0) return@forEach
+                val key = line.substring(0, delimiter).trim()
+                val value = line.substring(delimiter + 1).trim()
+                if (key.isNotBlank()) put(key, value)
             }
+        }
     }
-}
-
-fun Project.readServerHostingBaseUrl(): String? {
-    val serverDir = rootProject.projectDir.parentFile.resolve("server")
-    val pathConfig = serverDir.resolve("SERVER_ENV_PATH.txt")
-    val envPathRaw = pathConfig.firstConfigValue(
-        setOf("OPENAI_API_KEY_FILE_PATH", "API_KEY_FILE_PATH", "OPENAI_ENV_FILE")
-    ) ?: return null
-    val envPath = toBuildHostPath(expandServerPath(envPathRaw))
-    val envFile = file(envPath)
-    val hostingBaseUrl = envFile.firstConfigValue(setOf("HOSTING_BASE_URL")) ?: return null
-    return hostingBaseUrl.trimEnd('/').takeIf { it.isNotBlank() }
 }
 
 fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
-val serverHostingBaseUrl = project.readServerHostingBaseUrl()
-val defaultAiApiBaseUrl = serverHostingBaseUrl ?: "http://10.0.2.2:8088"
-val defaultHolidaySyncUrl = serverHostingBaseUrl?.let { "$it/holidays" } ?: "http://10.0.2.2:8088/holidays"
+// 앱 기본 서버/버전 설정은 app/APP_CLIENT_CONFIG.txt 에서 읽습니다.
+val appClientConfigFile = rootProject.projectDir.resolve("APP_CLIENT_CONFIG.txt")
+val appClientConfig = appClientConfigFile.readKeyValueConfig()
+
+val appDefaultServerBaseUrl = appClientConfig["SERVER_BASE_URL"]
+    ?.trimEnd('/')
+    ?.takeIf { it.isNotBlank() }
+    ?: error("APP_CLIENT_CONFIG.txt: SERVER_BASE_URL is required (e.g. http://10.0.2.2:8088)")
+val appVersionCode = appClientConfig["APP_VERSION_CODE"]
+    ?.toIntOrNull()
+    ?.takeIf { it > 0 }
+    ?: error("APP_CLIENT_CONFIG.txt: APP_VERSION_CODE must be a positive integer")
+val appVersionName = appClientConfig["APP_VERSION_NAME"]
+    ?.takeIf { it.isNotBlank() }
+    ?: error("APP_CLIENT_CONFIG.txt: APP_VERSION_NAME is required (e.g. 1.1.0)")
+val defaultAiApiBaseUrl = appDefaultServerBaseUrl
+val defaultHolidaySyncUrl = "$appDefaultServerBaseUrl/holidays"
 
 android {
     namespace = "com.echo.echocalendar"
@@ -85,12 +67,17 @@ android {
         applicationId = "com.echo.echocalendar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("int", "AI_API_TIMEOUT_MS", project.stringProperty("AI_API_TIMEOUT_MS", "12000"))
         buildConfigField("int", "HOLIDAY_SYNC_TIMEOUT_MS", project.stringProperty("HOLIDAY_SYNC_TIMEOUT_MS", "5000"))
+        buildConfigField(
+            "boolean",
+            "ALLOW_SIGNUP",
+            project.booleanProperty("ALLOW_SIGNUP", false).toString()
+        )
     }
 
     buildTypes {

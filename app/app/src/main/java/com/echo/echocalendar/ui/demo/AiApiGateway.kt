@@ -14,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 interface AiApiGateway {
+    suspend fun checkAppUpdate(currentVersionCode: Int): AppUpdateInfo?
     suspend fun interpretInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion?
     suspend fun interpretSearch(transcript: String): AiSearchSuggestion?
     suspend fun interpretModify(
@@ -40,6 +41,21 @@ interface AiApiGateway {
 class HttpAiApiGateway(
     private val usageAccessTokenProvider: (() -> String?)? = null
 ) : AiApiGateway {
+    override suspend fun checkAppUpdate(currentVersionCode: Int): AppUpdateInfo? {
+        val safeCode = maxOf(currentVersionCode, 0)
+        val json = getJson("/app/version?currentVersionCode=$safeCode", bearerToken = null) ?: return null
+        val latestVersionCode = json.optInt("latestVersionCode", 0)
+        if (latestVersionCode <= 0) return null
+        return AppUpdateInfo(
+            hasUpdate = json.optBoolean("hasUpdate", false),
+            required = json.optBoolean("required", false),
+            latestVersionCode = latestVersionCode,
+            latestVersionName = json.optString("latestVersionName", latestVersionCode.toString()),
+            minSupportedVersionCode = json.optInt("minSupportedVersionCode", latestVersionCode),
+            apkDownloadUrl = json.optNullableString("apkDownloadUrl")?.trim()?.takeIf { it.isNotBlank() }
+        )
+    }
+
     override suspend fun interpretInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion? {
         val request = JSONObject()
             .put("mode", AiMode.Input.value)

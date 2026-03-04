@@ -38,3 +38,7 @@ server/backend/.venv-linux/
 # Python cache under server tools
 server/tools/__pycache__/
 server/tools/**/*.pyc
+
+# APK build artifacts for server-side distribution
+server/downloads/*.apk
+!server/downloads/.gitkeep

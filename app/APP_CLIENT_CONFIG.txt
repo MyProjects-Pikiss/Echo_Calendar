@@ -1,0 +1,14 @@
+# Echo Calendar app client config
+# 기본값(Default)
+# SERVER_BASE_URL=https://echo-calendar.win
+# APP_VERSION_CODE=3
+# APP_VERSION_NAME=0.9.1
+
+# 설정값(Configured)
+# - 이 파일의 key=value 값을 앱 빌드가 직접 읽습니다.
+# - 운영 도메인 예시: SERVER_BASE_URL=https://echo-calendar.win
+# - 로컬 테스트 예시: SERVER_BASE_URL=http://10.0.2.2:8088
+
+SERVER_BASE_URL=https://echo-calendar.win
+APP_VERSION_CODE=3
+APP_VERSION_NAME=0.9.1

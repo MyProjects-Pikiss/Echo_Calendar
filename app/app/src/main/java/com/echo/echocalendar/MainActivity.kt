@@ -1,9 +1,12 @@
 package com.echo.echocalendar
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageInfoFlags
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,8 +15,10 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.echo.echocalendar.alarm.EventAlarmScheduler
 import com.echo.echocalendar.ui.demo.AiAssistantService
 import com.echo.echocalendar.ui.demo.AiRemoteException
+import com.echo.echocalendar.ui.demo.AppUpdateInfo
 import com.echo.echocalendar.ui.demo.CalendarViewModel
 import com.echo.echocalendar.ui.demo.CalendarViewModelFactory
 import com.echo.echocalendar.ui.demo.MonthCalendarScreen
@@ -51,6 +57,11 @@ import com.echo.echocalendar.ui.theme.EchoCalendarTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private data class AppVersionInfo(
+        val code: Int,
+        val name: String
+    )
+
     private val pendingOpenEventId = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,7 +103,52 @@ class MainActivity : ComponentActivity() {
                         prefs.getString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, "").orEmpty().isNotBlank()
                     )
                 }
-                if (isAuthenticated) {
+                var appUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+                var appUpdateChecked by remember { mutableStateOf(false) }
+                var currentVersionInfo by remember { mutableStateOf(AppVersionInfo(0, "")) }
+
+                LaunchedEffect(Unit) {
+                    currentVersionInfo = currentAppVersionInfo()
+                    appUpdateInfo = container.aiAssistantService.checkAppUpdate(currentVersionInfo.code)
+                    appUpdateChecked = true
+                }
+
+                val updateInfo = appUpdateInfo
+                if (updateInfo != null && updateInfo.hasUpdate) {
+                    AppUpdateRequiredScreen(
+                        appUpdateInfo = updateInfo,
+                        currentVersionCode = currentVersionInfo.code,
+                        currentVersionName = currentVersionInfo.name,
+                        onDownloadClick = {
+                            val apkUrl = updateInfo.apkDownloadUrl
+                            if (apkUrl.isNullOrBlank()) {
+                                Toast.makeText(context, "업데이트 링크가 아직 준비되지 않았어요.", Toast.LENGTH_SHORT).show()
+                                return@AppUpdateRequiredScreen
+                            }
+                            openExternalLink(context, apkUrl)
+                        },
+                        onSkipClick = if (updateInfo.required) {
+                            null
+                        } else {
+                            { appUpdateInfo = null }
+                        }
+                    )
+                } else if (!appUpdateChecked) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = "버전 확인 중...",
+                                modifier = Modifier.padding(top = 12.dp)
+                            )
+                        }
+                    }
+                } else if (isAuthenticated) {
                     MonthCalendarScreen(
                         calendarViewModel = calendarViewModel,
                         searchViewModel = searchViewModel,
@@ -111,6 +167,7 @@ class MainActivity : ComponentActivity() {
                     LoginRequiredScreen(
                         aiAssistantService = container.aiAssistantService,
                         isOnline = isOnlineState.value,
+                        signupEnabled = BuildConfig.ALLOW_SIGNUP,
                         onLoginSuccess = { token ->
                             prefs.edit().putString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, token).apply()
                             isAuthenticated = true
@@ -138,12 +195,75 @@ class MainActivity : ComponentActivity() {
     private fun extractOpenEventId(intent: Intent?): String? {
         return intent?.getStringExtra(EventAlarmScheduler.EXTRA_EVENT_ID)?.trim()?.takeIf { it.isNotBlank() }
     }
+
+    private fun currentAppVersionInfo(): AppVersionInfo {
+        val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(packageName, PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode
+        }
+        val versionName = packageInfo.versionName?.trim().orEmpty().ifBlank { versionCode.toString() }
+        return AppVersionInfo(code = versionCode, name = versionName)
+    }
+}
+
+@Composable
+private fun AppUpdateRequiredScreen(
+    appUpdateInfo: AppUpdateInfo,
+    currentVersionCode: Int,
+    currentVersionName: String,
+    onDownloadClick: () -> Unit,
+    onSkipClick: (() -> Unit)?
+) {
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("업데이트가 필요합니다", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "새 버전이 출시되었습니다 (현재 버전: $currentVersionName / 새 버전: ${appUpdateInfo.latestVersionName})",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                "현재 코드: $currentVersionCode, 최신 코드: ${appUpdateInfo.latestVersionCode}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (appUpdateInfo.required) {
+                Text("현재 버전은 더 이상 지원되지 않아 업데이트 후 사용 가능합니다.")
+            }
+            Button(
+                onClick = onDownloadClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("APK 다운로드")
+            }
+            if (onSkipClick != null) {
+                OutlinedButton(
+                    onClick = onSkipClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("나중에")
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun LoginRequiredScreen(
     aiAssistantService: AiAssistantService,
     isOnline: Boolean,
+    signupEnabled: Boolean,
     onLoginSuccess: (String) -> Unit
 ) {
     var username by remember { mutableStateOf("") }
@@ -159,8 +279,15 @@ private fun LoginRequiredScreen(
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("로그인 / 회원가입", style = MaterialTheme.typography.headlineMedium)
-            Text("처음이면 회원가입 후 바로 로그인됩니다.", style = MaterialTheme.typography.bodyMedium)
+            Text("로그인", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                if (signupEnabled) {
+                    "처음이면 회원가입 후 바로 로그인됩니다."
+                } else {
+                    "회원가입은 현재 임시 중단 상태입니다."
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -211,6 +338,10 @@ private fun LoginRequiredScreen(
             }
             OutlinedButton(
                 onClick = {
+                    if (!signupEnabled) {
+                        message = "회원가입이 현재 임시 중단 상태입니다."
+                        return@OutlinedButton
+                    }
                     if (!isOnline) {
                         message = "오프라인 상태에서는 회원가입할 수 없어요."
                         return@OutlinedButton
@@ -237,7 +368,7 @@ private fun LoginRequiredScreen(
                         }
                     }
                 },
-                enabled = !loading,
+                enabled = !loading && signupEnabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("회원가입")
@@ -253,6 +384,18 @@ private fun LoginRequiredScreen(
                 )
             }
         }
+    }
+}
+
+private fun openExternalLink(context: Context, rawUrl: String) {
+    val uri = runCatching { Uri.parse(rawUrl.trim()) }.getOrNull() ?: return
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "링크를 열 수 있는 앱이 없어요.", Toast.LENGTH_SHORT).show()
     }
 }
 

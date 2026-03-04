@@ -32,11 +32,40 @@
 
 - 동시 실행(권장): `server\RUN_ALL_SERVERS.bat`
   - 통합 서버(`8088`)를 새 창으로 실행
-- 통합 서버 엔드포인트: `/ai/*`, `/auth/*`, `/usage/*`, `/holidays`, `/health`
+- 통합 서버 엔드포인트: `/ai/*`, `/auth/*`, `/usage/*`, `/holidays`, `/health`, `/downloads/*`
+- 회원가입 차단(임시 운영): env에 `ALLOW_SIGNUP=false` 설정 시 `/auth/signup`이 403으로 차단됩니다.
 ## 3) 앱 연결 기준
 
-- Android 에뮬레이터 debug 실행 시 기본 주소는 `http://10.0.2.2:8088`
+- 앱 기본 설정 파일: `app\APP_CLIENT_CONFIG.txt`
+  - `SERVER_BASE_URL`, `APP_VERSION_CODE`, `APP_VERSION_NAME` 값을 앱 빌드에서 직접 읽습니다.
+- Android 에뮬레이터 debug 실행 기본 주소는 `http://10.0.2.2:8088`
 - 서버 창은 테스트 중 닫지 말고 유지
+- 앱 버전 체크 API: `GET /app/version?currentVersionCode=<정수>`
+  - `APP_LATEST_VERSION_CODE`, `APP_LATEST_VERSION_NAME`, `APP_MIN_SUPPORTED_VERSION_CODE`, `APP_APK_DOWNLOAD_URL` 값을 `SERVER_ENV_TEMPLATE.env`(실사용 env 파일)에서 설정하면 앱이 구버전에서 업데이트 안내를 표시합니다.
+
+## 3-2) APK 서버 배포(서버 폴더 방식)
+
+아래는 **도메인 + 서버 폴더**만으로 APK 업데이트 링크를 배포하는 기본 절차입니다.
+
+1. 앱 릴리즈 APK를 빌드합니다.
+   - 예: `app\app\build\outputs\apk\release\app-release.apk`
+2. 서버 폴더의 `server\downloads\`에 APK를 복사합니다.
+   - 권장 파일명: `echo-calendar-latest.apk`
+3. 서버 env 파일(`SERVER_ENV_PATH.txt`로 지정한 실사용 env)에 아래 값을 맞춥니다.
+   - `APP_DOWNLOADS_DIR=downloads`
+   - `APP_APK_FILENAME=echo-calendar-latest.apk`
+   - `APP_APK_DOWNLOAD_URL=` (비워두면 서버가 자동 URL 생성)
+   - `APP_LATEST_VERSION_CODE=<새 버전 코드>`
+   - `APP_LATEST_VERSION_NAME=<새 버전 이름>`
+   - `APP_MIN_SUPPORTED_VERSION_CODE=<최소 지원 코드>`
+4. `server\RUN_ALL_SERVERS.bat`로 서버를 재시작합니다.
+5. 브라우저에서 APK 링크를 직접 확인합니다.
+   - `https://<도메인>/downloads/echo-calendar-latest.apk`
+
+참고:
+- `APP_APK_DOWNLOAD_URL`를 직접 넣으면 그 링크를 우선 사용합니다.
+- 비워두면 서버가 현재 요청 도메인 기준으로 `/downloads/<APP_APK_FILENAME>` URL을 자동 생성합니다.
+- 새 배포 때는 같은 파일명을 덮어쓰기하면 링크를 바꾸지 않아도 됩니다.
 
 ## 3-1) 실기기 연결 기준
 

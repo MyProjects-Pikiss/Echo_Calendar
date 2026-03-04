@@ -126,6 +126,18 @@ class Settings:
     holiday_bootstrap_start_date: str = os.getenv("HOLIDAY_BOOTSTRAP_START_DATE", "1970-01-01").strip()
     holiday_bootstrap_forward_years: float = float(os.getenv("HOLIDAY_BOOTSTRAP_FORWARD_YEARS", "5"))
     holiday_daily_window_years: float = float(os.getenv("HOLIDAY_DAILY_WINDOW_YEARS", "1"))
+    app_latest_version_code: int = int(os.getenv("APP_LATEST_VERSION_CODE", "1"))
+    app_latest_version_name: str = os.getenv("APP_LATEST_VERSION_NAME", "1.0").strip()
+    app_min_supported_version_code: int = int(os.getenv("APP_MIN_SUPPORTED_VERSION_CODE", "1"))
+    app_downloads_dir: str = os.getenv("APP_DOWNLOADS_DIR", "downloads").strip()
+    app_apk_filename: str = os.getenv("APP_APK_FILENAME", "echo-calendar-latest.apk").strip()
+    app_apk_download_url: str = os.getenv("APP_APK_DOWNLOAD_URL", "").strip()
+    allow_signup: bool = os.getenv("ALLOW_SIGNUP", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 settings = Settings()
