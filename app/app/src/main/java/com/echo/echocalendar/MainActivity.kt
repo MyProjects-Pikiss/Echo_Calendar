@@ -1,13 +1,17 @@
 package com.echo.echocalendar
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.content.pm.PackageInfoFlags
 import android.content.pm.PackageManager
+import android.content.pm.PackageManager.PackageInfoFlags
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import android.content.Context
@@ -21,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,6 +35,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -68,9 +74,34 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         pendingOpenEventId.value = extractOpenEventId(intent)
         maybeRequestNotificationPermission()
-        enableEdgeToEdge()
+        maybeRequestExactAlarmPermission()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#2F3338")),
+            navigationBarStyle = SystemBarStyle.auto(
+                AndroidColor.parseColor("#F2F4F8"),
+                AndroidColor.parseColor("#121212")
+            )
+        )
         setContent {
-            EchoCalendarTheme {
+            val context = LocalContext.current
+            val prefs = remember(context) {
+                context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+            }
+            var themeMode by remember {
+                mutableStateOf(
+                    prefs.getString(SettingsKeys.KEY_THEME_MODE, SettingsKeys.THEME_MODE_SYSTEM)
+                        ?.trim()
+                        .orEmpty()
+                        .ifBlank { SettingsKeys.THEME_MODE_SYSTEM }
+                )
+            }
+            val useDarkTheme = when (themeMode) {
+                SettingsKeys.THEME_MODE_DARK -> true
+                SettingsKeys.THEME_MODE_LIGHT -> false
+                else -> isSystemInDarkTheme()
+            }
+
+            EchoCalendarTheme(darkTheme = useDarkTheme) {
                 val container = (application as EchoCalendarApplication).container
                 val calendarViewModel = viewModel<CalendarViewModel>(
                     factory = CalendarViewModelFactory(
@@ -94,10 +125,6 @@ class MainActivity : ComponentActivity() {
                     factory = SearchViewModelFactory(container.searchEventsUseCase)
                 )
                 val isOnlineState = rememberIsOnline()
-                val context = LocalContext.current
-                val prefs = remember(context) {
-                    context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
-                }
                 var isAuthenticated by remember {
                     mutableStateOf(
                         prefs.getString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, "").orEmpty().isNotBlank()
@@ -109,6 +136,11 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     currentVersionInfo = currentAppVersionInfo()
+                    if (!isOnlineState.value) {
+                        appUpdateInfo = null
+                        appUpdateChecked = true
+                        return@LaunchedEffect
+                    }
                     appUpdateInfo = container.aiAssistantService.checkAppUpdate(currentVersionInfo.code)
                     appUpdateChecked = true
                 }
@@ -138,6 +170,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .systemBarsPadding()
                                 .padding(24.dp),
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -155,6 +188,13 @@ class MainActivity : ComponentActivity() {
                         aiSearchViewModel = aiSearchViewModel,
                         aiAssistantService = container.aiAssistantService,
                         isOnline = isOnlineState.value,
+                        themeMode = themeMode,
+                        onThemeModeChange = { nextMode ->
+                            themeMode = nextMode
+                            prefs.edit().putString(SettingsKeys.KEY_THEME_MODE, nextMode).apply()
+                        },
+                        appVersionName = currentVersionInfo.name,
+                        appVersionCode = currentVersionInfo.code,
                         openEventId = pendingOpenEventId.value,
                         onOpenEventHandled = {
                             pendingOpenEventId.value = null
@@ -192,6 +232,16 @@ class MainActivity : ComponentActivity() {
         ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
     }
 
+    private fun maybeRequestExactAlarmPermission() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (alarmManager.canScheduleExactAlarms()) return
+        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        runCatching { startActivity(intent) }
+    }
+
     private fun extractOpenEventId(intent: Intent?): String? {
         return intent?.getStringExtra(EventAlarmScheduler.EXTRA_EVENT_ID)?.trim()?.takeIf { it.isNotBlank() }
     }
@@ -226,6 +276,7 @@ private fun AppUpdateRequiredScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .systemBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -276,6 +327,7 @@ private fun LoginRequiredScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .systemBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

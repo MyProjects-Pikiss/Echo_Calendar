@@ -29,6 +29,23 @@ def _normalize_string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _limit_labels(labels: list[str], max_count: int = 5) -> list[str]:
+    if max_count <= 0:
+        return []
+    out: list[str] = []
+    for raw in labels:
+        token = raw.strip().lstrip("#")
+        if not token:
+            continue
+        key = token.lower()
+        if any(existing.lower() == key for existing in out):
+            continue
+        out.append(token)
+        if len(out) >= max_count:
+            break
+    return out
+
+
 def _normalize_time(value: str) -> str:
     text = value.strip()
     if not text:
@@ -57,7 +74,7 @@ def ensure_input_response(raw: dict[str, Any], transcript: str, selected_date: s
     candidate["categoryId"] = category_id if category_id in KNOWN_CATEGORY_IDS else "other"
     candidate["placeText"] = _trimmed_text(candidate.get("placeText"))
     candidate["body"] = _trimmed_text(candidate.get("body")) or transcript
-    candidate["labels"] = _normalize_string_list(candidate.get("labels"))
+    candidate["labels"] = _limit_labels(_normalize_string_list(candidate.get("labels")))
     candidate["missingRequired"] = _normalize_string_list(candidate.get("missingRequired"))
     candidate["intent"] = _trimmed_text(candidate.get("intent")).lower() or "create"
     try:
@@ -74,7 +91,7 @@ def ensure_search_response(raw: dict[str, Any], transcript: str) -> SearchInterp
     candidate["dateTo"] = _trimmed_text(candidate.get("dateTo")) or None
     candidate["categoryIds"] = _normalize_string_list(candidate.get("categoryIds"))
     candidate["categoryIds"] = [item for item in candidate["categoryIds"] if item in KNOWN_CATEGORY_IDS]
-    candidate["labels"] = _normalize_string_list(candidate.get("labels"))
+    candidate["labels"] = _limit_labels(_normalize_string_list(candidate.get("labels")))
     if (
         not candidate["query"]
         and not candidate["dateFrom"]
@@ -126,7 +143,7 @@ def ensure_modify_response(raw: dict[str, Any], transcript: str) -> ModifyInterp
     candidate["body"] = body or None
 
     labels_raw = candidate.get("labels")
-    labels = _normalize_string_list(labels_raw)
+    labels = _limit_labels(_normalize_string_list(labels_raw))
     if labels_raw is None:
         candidate["labels"] = None
     else:

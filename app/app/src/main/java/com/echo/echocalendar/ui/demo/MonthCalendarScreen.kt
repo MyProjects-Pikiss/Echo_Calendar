@@ -35,8 +35,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +55,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -70,6 +74,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,8 +87,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import com.echo.echocalendar.SettingsKeys
@@ -92,6 +99,7 @@ import com.echo.echocalendar.domain.usecase.MAX_LABELS_PER_EVENT
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
@@ -107,6 +115,10 @@ fun MonthCalendarScreen(
     aiSearchViewModel: SearchViewModel,
     aiAssistantService: AiAssistantService,
     isOnline: Boolean,
+    themeMode: String = SettingsKeys.THEME_MODE_SYSTEM,
+    onThemeModeChange: (String) -> Unit = {},
+    appVersionName: String = "",
+    appVersionCode: Int = 0,
     openEventId: String? = null,
     onOpenEventHandled: () -> Unit = {},
     onLogout: () -> Unit = {}
@@ -189,12 +201,15 @@ fun MonthCalendarScreen(
                             selectedDate = calendarViewModel.selectedDate
                         )
                         val suggestion = result.suggestion
+                        val relativeDateTime = parseRelativeReminderDateTime(transcript, zoneId)
+                        val resolvedDate = relativeDateTime?.toLocalDate() ?: suggestion.date
                         val wantsAlarm = wantsAlarmFromTranscript(transcript)
                         val wantsYearlyRecurring = wantsYearlyRecurringFromTranscript(transcript)
                         val suggestionRepeatYearly = suggestion.repeatYearly ?: if (wantsYearlyRecurring) true else null
                         val isAutoTimeApplied = suggestion.timeText.isBlank()
                         val resolvedTimeText = suggestion.timeText.trim().ifBlank {
-                            LocalTime.now(zoneId).format(timeFormatter)
+                            relativeDateTime?.toLocalTime()?.format(timeFormatter)
+                                ?: LocalTime.now(zoneId).format(timeFormatter)
                         }
                         val suggestionDraft = EventDraft(
                             summary = suggestion.summary,
@@ -206,7 +221,7 @@ fun MonthCalendarScreen(
                             labelsText = suggestion.labelsText
                         )
                         val candidates = candidateEventsForDate(
-                            date = suggestion.date,
+                            date = resolvedDate,
                             selectedDate = calendarViewModel.selectedDate,
                             eventsByDate = calendarViewModel.eventsByDate,
                             eventsOfSelectedDate = calendarViewModel.eventsOfDay
@@ -221,7 +236,7 @@ fun MonthCalendarScreen(
                                 pendingEdit = PendingEdit(
                                     action = CrudAction.Create,
                                     eventId = null,
-                                    date = suggestion.date,
+                                    date = resolvedDate,
                                     draft = suggestionDraft,
                                     alarmEnabled = wantsAlarm,
                                     rawInputText = transcript
@@ -491,8 +506,6 @@ fun MonthCalendarScreen(
     }
 
     val pagerState = rememberPagerState(initialPage = 1200, pageCount = { 2400 })
-    val bottomBarHeight = 72.dp
-    val popupWidth = 240.dp
     val density = LocalDensity.current
 
     LaunchedEffect(pagerState.currentPage) {
@@ -547,16 +560,49 @@ fun MonthCalendarScreen(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val selectedHolidayBadge = holidayBadge(
+            date = calendarViewModel.selectedDate,
+            syncedHolidayBadges = syncedHolidayBadges
+        )
+        val isCompactHeight = maxHeight < 760.dp
+        val isWideScreen = maxWidth >= 700.dp
+        val bottomBarHeight = (maxHeight * 0.08f).coerceIn(50.dp, 64.dp)
+        val popupWidth = (maxWidth * 0.32f).coerceIn(220.dp, 320.dp)
+        val headerHeight = (maxHeight * 0.07f).coerceIn(44.dp, 56.dp)
+        val headerIconButtonSize = (headerHeight * 0.78f).coerceIn(34.dp, 42.dp)
+        val headerIconVisualSize = (headerIconButtonSize * 0.48f).coerceIn(16.dp, 22.dp)
+        val headerHorizontalPadding = (maxWidth * 0.012f).coerceIn(4.dp, 14.dp)
+        val todayButtonHorizontalPadding = (maxWidth * 0.01f).coerceIn(6.dp, 14.dp)
+        val contentPadding = (maxHeight * 0.018f).coerceIn(8.dp, 18.dp)
+        val sectionGap = (maxHeight * 0.01f).coerceIn(4.dp, 10.dp)
+        val calendarInnerGap = (maxHeight * 0.008f).coerceIn(2.dp, 8.dp)
+        val eventListMaxHeight = (maxHeight * 0.2f).coerceIn(110.dp, 220.dp)
+        val detailVerticalGap = (maxHeight * 0.01f).coerceIn(6.dp, 12.dp)
+        val eventItemGap = (maxHeight * 0.008f).coerceIn(4.dp, 8.dp)
+        val eventCardHorizontalPadding = (maxWidth * 0.014f).coerceIn(10.dp, 16.dp)
+        val eventCardVerticalPadding = (maxHeight * 0.015f).coerceIn(8.dp, 14.dp)
+        val panelGap = (maxWidth * 0.012f).coerceIn(8.dp, 16.dp)
+        val calendarAreaWeight = if (isCompactHeight) 1.18f else 1.28f
+        val calendarSurfacePadding = (maxWidth * 0.01f).coerceIn(6.dp, 10.dp)
+        val calendarPanelPadding = (maxWidth * 0.01f).coerceIn(6.dp, 12.dp)
+        val detailPanelPadding = (maxWidth * 0.014f).coerceIn(10.dp, 18.dp)
+        val bottomDividerHeight = (bottomBarHeight * 0.58f).coerceIn(24.dp, 40.dp)
+        val bottomIconSize = (bottomBarHeight * 0.3f).coerceIn(15.dp, 20.dp)
+        val bottomLabelSizeSp = (bottomBarHeight.value * 0.18f).coerceIn(9f, 11f)
+        val calendarPanelWeight = when {
+            maxWidth >= 1200.dp -> 2.2f
+            maxWidth >= 900.dp -> 2.0f
+            else -> 1.8f
+        }
         val maxWidthPx = with(density) { maxWidth.toPx() }
         val popupWidthPx = with(density) { popupWidth.toPx() }
         val anchorFraction = if (activeTrigger == InputTrigger.Keyboard) 0.25f else 0.75f
         val desiredOffsetPx = maxWidthPx * anchorFraction - popupWidthPx / 2
         val clampedOffsetPx = desiredOffsetPx.coerceIn(0f, maxWidthPx - popupWidthPx)
-        val popupYOffsetPx = with(density) { -bottomBarHeight.toPx() }
         val animatedOffset by animateIntOffsetAsState(
             targetValue = androidx.compose.ui.unit.IntOffset(
                 x = clampedOffsetPx.roundToInt(),
-                y = popupYOffsetPx.roundToInt()
+                y = 0
             ),
             animationSpec = tween(durationMillis = 180),
             label = "ActionPickerOffset"
@@ -565,141 +611,362 @@ fun MonthCalendarScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 0.dp, vertical = contentPadding)
                 .padding(bottom = bottomBarHeight)
         ) {
-            Row(
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                shape = MaterialTheme.shapes.large
             ) {
-                IconButton(onClick = { isProfileOpen = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "프로필"
-                    )
-                }
                 Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { shownMonth = shownMonth.minusMonths(1) }) {
-                        Text(text = "◀")
-                    }
-                    Text(
-                        text = monthFormatter.format(shownMonth.atDay(1)),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.clickable { isJumpDialogOpen = true }
-                    )
-                    IconButton(onClick = { shownMonth = shownMonth.plusMonths(1) }) {
-                        Text(text = "▶")
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
-                        onClick = {
-                            shownMonth = YearMonth.from(today)
-                            calendarViewModel.onDateSelected(today)
-                        }
-                    ) {
-                        Text(text = "오늘")
-                    }
-                    IconButton(onClick = { isSettingsOpen = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "설정"
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf(
-                    DayOfWeek.SUNDAY,
-                    DayOfWeek.MONDAY,
-                    DayOfWeek.TUESDAY,
-                    DayOfWeek.WEDNESDAY,
-                    DayOfWeek.THURSDAY,
-                    DayOfWeek.FRIDAY,
-                    DayOfWeek.SATURDAY
-                ).forEach { dayOfWeek ->
-                    val label = when (dayOfWeek) {
-                        DayOfWeek.SUNDAY -> "일"
-                        DayOfWeek.MONDAY -> "월"
-                        DayOfWeek.TUESDAY -> "화"
-                        DayOfWeek.WEDNESDAY -> "수"
-                        DayOfWeek.THURSDAY -> "목"
-                        DayOfWeek.FRIDAY -> "금"
-                        DayOfWeek.SATURDAY -> "토"
-                    }
-                    Text(
-                        text = label,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) { page ->
-                val month = initialMonth.plusMonths((page - 1200).toLong())
-                MonthGrid(
-                    month = month,
-                    today = today,
-                    selectedDate = calendarViewModel.selectedDate,
-                    eventsByDate = calendarViewModel.eventsByDate,
-                    syncedHolidayBadges = syncedHolidayBadges,
-                    onDateClick = {
-                        calendarViewModel.onDateSelected(it)
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            if (calendarViewModel.eventsOfDay.isEmpty()) {
-                Text(text = "해당 날짜의 이벤트가 없습니다.")
-            } else {
-                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 120.dp, max = 220.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .height(headerHeight)
+                        .padding(horizontal = headerHorizontalPadding, vertical = 0.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(calendarViewModel.eventsOfDay) { event ->
-                        val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
-                            .atZone(zoneId)
-                            .toLocalDateTime()
-                        Card(
+                    IconButton(
+                        onClick = { isProfileOpen = true },
+                        modifier = Modifier.size(headerIconButtonSize)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "프로필",
+                            modifier = Modifier.size(headerIconVisualSize)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { shownMonth = shownMonth.minusMonths(1) },
+                            modifier = Modifier.size(headerIconButtonSize)
+                        ) {
+                            Text(text = "◀")
+                        }
+                        Text(
+                            text = monthFormatter.format(shownMonth.atDay(1)),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { isJumpDialogOpen = true }
+                        )
+                        IconButton(
+                            onClick = { shownMonth = shownMonth.plusMonths(1) },
+                            modifier = Modifier.size(headerIconButtonSize)
+                        ) {
+                            Text(text = "▶")
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = {
+                                shownMonth = YearMonth.from(today)
+                                calendarViewModel.onDateSelected(today)
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            contentPadding = PaddingValues(horizontal = todayButtonHorizontalPadding, vertical = 0.dp),
+                            modifier = Modifier.height(headerIconButtonSize)
+                        ) {
+                            Text(text = "오늘")
+                        }
+                        IconButton(
+                            onClick = { isSettingsOpen = true },
+                            modifier = Modifier.size(headerIconButtonSize)
+                        ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "설정",
+                            modifier = Modifier.size(headerIconVisualSize)
+                        )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(sectionGap))
+            if (isWideScreen) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(calendarAreaWeight),
+                    horizontalArrangement = Arrangement.spacedBy(panelGap)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(calendarPanelWeight)
+                            .fillMaxHeight(),
+                        shape = MaterialTheme.shapes.large,
+                        tonalElevation = 1.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize().padding(calendarPanelPadding)) {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                listOf(
+                                    DayOfWeek.SUNDAY,
+                                    DayOfWeek.MONDAY,
+                                    DayOfWeek.TUESDAY,
+                                    DayOfWeek.WEDNESDAY,
+                                    DayOfWeek.THURSDAY,
+                                    DayOfWeek.FRIDAY,
+                                    DayOfWeek.SATURDAY
+                                ).forEach { dayOfWeek ->
+                                    val label = when (dayOfWeek) {
+                                        DayOfWeek.SUNDAY -> "일"
+                                        DayOfWeek.MONDAY -> "월"
+                                        DayOfWeek.TUESDAY -> "화"
+                                        DayOfWeek.WEDNESDAY -> "수"
+                                        DayOfWeek.THURSDAY -> "목"
+                                        DayOfWeek.FRIDAY -> "금"
+                                        DayOfWeek.SATURDAY -> "토"
+                                    }
+                                    Text(
+                                        text = label,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(calendarInnerGap))
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) { page ->
+                                val month = initialMonth.plusMonths((page - 1200).toLong())
+                                MonthGrid(
+                                    month = month,
+                                    today = today,
+                                    selectedDate = calendarViewModel.selectedDate,
+                                    eventsByDate = calendarViewModel.eventsByDate,
+                                    syncedHolidayBadges = syncedHolidayBadges,
+                                    compactCell = false,
+                                    onDateClick = {
+                                        calendarViewModel.onDateSelected(it)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        shape = MaterialTheme.shapes.large,
+                        tonalElevation = 1.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(detailPanelPadding),
+                            verticalArrangement = Arrangement.spacedBy(detailVerticalGap)
+                        ) {
+                            Text(
+                                text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            selectedHolidayBadge?.let { holiday ->
+                                Text(
+                                    text = if (holiday.kind == HolidayKind.PublicHoliday) {
+                                        "국경일: ${holiday.label}"
+                                    } else {
+                                        "기념일: ${holiday.label}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (holiday.kind == HolidayKind.PublicHoliday) {
+                                        Color(0xFFE53935)
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    }
+                                )
+                            }
+                            if (calendarViewModel.eventsOfDay.isEmpty()) {
+                                Text(
+                                    text = "해당 날짜의 이벤트가 없습니다.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(eventItemGap)
+                                ) {
+                                    items(calendarViewModel.eventsOfDay) { event ->
+                                        val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                                            .atZone(zoneId)
+                                            .toLocalDateTime()
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { selectedEvent = event }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(
+                                                    horizontal = eventCardHorizontalPadding,
+                                                    vertical = eventCardVerticalPadding
+                                                ),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = event.summary,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = timeFormatter.format(eventDateTime),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(calendarAreaWeight),
+                    shape = MaterialTheme.shapes.large,
+                    tonalElevation = 1.dp
+                ) {
+                    Column(modifier = Modifier.fillMaxSize().padding(calendarSurfacePadding)) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            listOf(
+                                DayOfWeek.SUNDAY,
+                                DayOfWeek.MONDAY,
+                                DayOfWeek.TUESDAY,
+                                DayOfWeek.WEDNESDAY,
+                                DayOfWeek.THURSDAY,
+                                DayOfWeek.FRIDAY,
+                                DayOfWeek.SATURDAY
+                            ).forEach { dayOfWeek ->
+                                val label = when (dayOfWeek) {
+                                    DayOfWeek.SUNDAY -> "일"
+                                    DayOfWeek.MONDAY -> "월"
+                                    DayOfWeek.TUESDAY -> "화"
+                                    DayOfWeek.WEDNESDAY -> "수"
+                                    DayOfWeek.THURSDAY -> "목"
+                                    DayOfWeek.FRIDAY -> "금"
+                                    DayOfWeek.SATURDAY -> "토"
+                                }
+                                Text(
+                                    text = label,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(calendarInnerGap))
+                        HorizontalPager(
+                            state = pagerState,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedEvent = event }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                .weight(1f)
+                        ) { page ->
+                            val month = initialMonth.plusMonths((page - 1200).toLong())
+                            MonthGrid(
+                                month = month,
+                                today = today,
+                                selectedDate = calendarViewModel.selectedDate,
+                                eventsByDate = calendarViewModel.eventsByDate,
+                                syncedHolidayBadges = syncedHolidayBadges,
+                                compactCell = isCompactHeight,
+                                onDateClick = {
+                                    calendarViewModel.onDateSelected(it)
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(sectionGap))
+                Text(
+                    text = "선택된 날짜: ${calendarViewModel.selectedDate.format(dateFormatter)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                selectedHolidayBadge?.let { holiday ->
+                    Text(
+                        text = if (holiday.kind == HolidayKind.PublicHoliday) {
+                            "국경일: ${holiday.label}"
+                        } else {
+                            "기념일: ${holiday.label}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (holiday.kind == HolidayKind.PublicHoliday) {
+                            Color(0xFFE53935)
+                        } else {
+                            MaterialTheme.colorScheme.secondary
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(sectionGap))
+                if (calendarViewModel.eventsOfDay.isEmpty()) {
+                    Text(
+                        text = "해당 날짜의 이벤트가 없습니다.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 110.dp, max = eventListMaxHeight),
+                        verticalArrangement = Arrangement.spacedBy(eventItemGap)
+                    ) {
+                        items(calendarViewModel.eventsOfDay) { event ->
+                            val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                                .atZone(zoneId)
+                                .toLocalDateTime()
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedEvent = event }
                             ) {
-                                Text(
-                                    text = event.summary,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = timeFormatter.format(eventDateTime),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                Row(
+                                    modifier = Modifier.padding(
+                                        horizontal = eventCardHorizontalPadding,
+                                        vertical = eventCardVerticalPadding
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = event.summary,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = timeFormatter.format(eventDateTime),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -724,6 +991,8 @@ fun MonthCalendarScreen(
             visible = isActionPickerOpen,
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .padding(bottom = bottomBarHeight + 8.dp)
+                .navigationBarsPadding()
                 .offset { animatedOffset },
             enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
                 animationSpec = tween(160),
@@ -865,7 +1134,8 @@ fun MonthCalendarScreen(
         Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .navigationBarsPadding(),
             tonalElevation = 4.dp
         ) {
             Row(
@@ -886,11 +1156,13 @@ fun MonthCalendarScreen(
                             isActionPickerOpen = true
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconSize = bottomIconSize,
+                    labelFontSizeSp = bottomLabelSizeSp
                 )
                 HorizontalDivider(
                     modifier = Modifier
-                        .height(bottomBarHeight * 0.6f)
+                        .height(bottomDividerHeight)
                         .width(1.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                 )
@@ -906,7 +1178,9 @@ fun MonthCalendarScreen(
                             isActionPickerOpen = true
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconSize = bottomIconSize,
+                    labelFontSizeSp = bottomLabelSizeSp
                 )
             }
         }
@@ -1071,6 +1345,40 @@ fun MonthCalendarScreen(
                     HorizontalDivider()
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
+                            text = "화면 테마",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "시스템 기본/라이트/다크 중 선택",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AlarmModeTile(
+                                label = "시스템",
+                                selected = themeMode == SettingsKeys.THEME_MODE_SYSTEM,
+                                onSelect = { onThemeModeChange(SettingsKeys.THEME_MODE_SYSTEM) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            AlarmModeTile(
+                                label = "라이트",
+                                selected = themeMode == SettingsKeys.THEME_MODE_LIGHT,
+                                onSelect = { onThemeModeChange(SettingsKeys.THEME_MODE_LIGHT) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            AlarmModeTile(
+                                label = "다크",
+                                selected = themeMode == SettingsKeys.THEME_MODE_DARK,
+                                onSelect = { onThemeModeChange(SettingsKeys.THEME_MODE_DARK) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
                             text = "알림 방식",
                             style = MaterialTheme.typography.titleMedium
                         )
@@ -1118,6 +1426,11 @@ fun MonthCalendarScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "앱 버전: ${appVersionName.ifBlank { "-" }} (${if (appVersionCode > 0) appVersionCode else "-"})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
@@ -1816,7 +2129,9 @@ private fun BottomBarButton(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 16.dp,
+    labelFontSizeSp: Float = 10f
 ) {
     val tint = if (enabled) {
         MaterialTheme.colorScheme.onSurface
@@ -1827,17 +2142,22 @@ private fun BottomBarButton(
         modifier = modifier
             .fillMaxHeight()
             .clickable(enabled = enabled, onClick = onClick),
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier.size(iconSize)
         )
+        Spacer(modifier = Modifier.height(1.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = labelFontSizeSp.sp,
+                lineHeight = (labelFontSizeSp + 1f).sp
+            ),
             color = tint
         )
     }
@@ -2111,6 +2431,21 @@ private fun wantsYearlyRecurringFromTranscript(transcript: String): Boolean {
         normalized.contains("anniversary")
 }
 
+private fun parseRelativeReminderDateTime(transcript: String, zoneId: ZoneId): LocalDateTime? {
+    if (transcript.isBlank()) return null
+    val compact = transcript.lowercase().replace(" ", "")
+    val minuteMatch = Regex("""(\d{1,3})분(?:뒤|후)""").find(compact)
+    val hourMatch = Regex("""(\d{1,2})시간(?:뒤|후)""").find(compact)
+    val minutes = minuteMatch?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+    val hours = hourMatch?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0L
+    val totalMinutes = (hours * 60L) + minutes
+    if (totalMinutes <= 0L) return null
+    return LocalDateTime.now(zoneId)
+        .withSecond(0)
+        .withNano(0)
+        .plusMinutes(totalMinutes)
+}
+
 private fun findBestTargetEvent(
     candidates: List<com.echo.echocalendar.data.local.EventEntity>,
     summaryHint: String,
@@ -2297,11 +2632,19 @@ private fun dayTextColor(
     isInMonth: Boolean,
     holidayBadge: HolidayBadge?
 ): Color {
-    val baseAlpha = if (isInMonth) 1f else 0.4f
+    val darkTheme = isSystemInDarkTheme()
+    val baseAlpha = if (isInMonth) 1f else 0.7f
+    val sundayColor = if (darkTheme) Color(0xFFFF8A80) else Color(0xFFE53935)
+    val saturdayColor = if (darkTheme) Color(0xFF8AB4F8) else Color(0xFF1E5AFF)
+    val weekdayColor = if (isInMonth) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     val baseColor = when {
-        holidayBadge?.kind == HolidayKind.PublicHoliday || date.dayOfWeek == DayOfWeek.SUNDAY -> Color(0xFFE53935)
-        date.dayOfWeek == DayOfWeek.SATURDAY -> Color(0xFF1E5AFF)
-        else -> MaterialTheme.colorScheme.onSurface
+        holidayBadge?.kind == HolidayKind.PublicHoliday || date.dayOfWeek == DayOfWeek.SUNDAY -> sundayColor
+        date.dayOfWeek == DayOfWeek.SATURDAY -> saturdayColor
+        else -> weekdayColor
     }
     return baseColor.copy(alpha = baseAlpha)
 }
@@ -2313,6 +2656,7 @@ private fun MonthGrid(
     selectedDate: LocalDate,
     eventsByDate: Map<LocalDate, List<com.echo.echocalendar.data.local.EventEntity>>,
     syncedHolidayBadges: Map<LocalDate, HolidayBadge>,
+    compactCell: Boolean,
     onDateClick: (LocalDate) -> Unit
 ) {
     val firstDay = remember(month) { month.atDay(1) }
@@ -2320,14 +2664,27 @@ private fun MonthGrid(
     val gridStart = remember(month) { firstDay.minusDays(offset.toLong()) }
     val dates = remember(month) { List(42) { gridStart.plusDays(it.toLong()) } }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
         dates.chunked(7).forEach { week ->
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 week.forEach { date ->
                     val isInMonth = date.month == month.month
                     val isToday = date == today
                     val isSelected = date == selectedDate
-                    val scale = if (isSelected) 1.15f else 1f
+                    val scale = if (isSelected) 1.04f else 1f
+                    val cellPadding = if (compactCell) 2.dp else 3.dp
+                    val cellTextSizeSp = if (compactCell) 10f else 11f
+                    val cellTextStyle = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = cellTextSizeSp.sp,
+                        lineHeight = (cellTextSizeSp + 1f).sp
+                    )
                     val holidayBadge = holidayBadge(date, syncedHolidayBadges)
                     val border = if (isToday) {
                         BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
@@ -2342,8 +2699,7 @@ private fun MonthGrid(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(0.75f)
-                            .padding(1.dp)
+                            .fillMaxHeight()
                             .scale(scale)
                             .zIndex(if (isSelected) 1f else 0f)
                             .clickable { onDateClick(date) },
@@ -2353,8 +2709,8 @@ private fun MonthGrid(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(background)
-                                .padding(6.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
+                                .padding(cellPadding),
+                            verticalArrangement = Arrangement.Top
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -2362,7 +2718,7 @@ private fun MonthGrid(
                             ) {
                                 Text(
                                     text = date.dayOfMonth.toString(),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.titleSmall,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = dayTextColor(date, isInMonth, holidayBadge)
                                 )
@@ -2381,32 +2737,38 @@ private fun MonthGrid(
                                 }
                             }
                             if (holidayBadge != null) {
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Text(
-                                    text = holidayBadge.label,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = holidayBadge.label.trim(),
+                                    style = cellTextStyle,
                                     color = if (holidayBadge.kind == HolidayKind.PublicHoliday) {
                                         Color(0xFFE53935)
                                     } else {
                                         MaterialTheme.colorScheme.secondary
                                     },
-                                    maxLines = 1,
+                                    maxLines = 2,
+                                    softWrap = true,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                             val dayEvents = eventsByDate[date].orEmpty()
                             if (isInMonth && dayEvents.isNotEmpty()) {
                                 val summary = dayEvents.first().summary
+                                Spacer(modifier = Modifier.height(1.dp))
                                 Column {
                                     Text(
-                                        text = summary,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
+                                        text = summary.trim(),
+                                        style = cellTextStyle,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        softWrap = true,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     if (dayEvents.size > 1) {
                                         Text(
                                             text = "+${dayEvents.size - 1}개",
-                                            style = MaterialTheme.typography.labelSmall
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }

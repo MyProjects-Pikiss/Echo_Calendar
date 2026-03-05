@@ -8,10 +8,8 @@ import time
 from datetime import date
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
-
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -24,6 +22,7 @@ from .contract_guard import (
     ensure_search_response,
 )
 from .interpreters import (
+    infer_input_labels,
     local_input_interpret,
     local_modify_interpret,
     local_refine_field,
@@ -202,6 +201,8 @@ def _record_ai_usage(
     transcript: str,
     success: bool,
     usage: LlmUsage | None = None,
+    llm_input_payload: dict[str, Any] | None = None,
+    llm_output_payload: dict[str, Any] | None = None,
     started_at: float | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
@@ -209,6 +210,18 @@ def _record_ai_usage(
     latency_ms = 0
     if started_at is not None:
         latency_ms = int((time.perf_counter() - started_at) * 1000)
+    llm_input_text: str | None = None
+    if llm_input_payload is not None:
+        try:
+            llm_input_text = json.dumps(llm_input_payload, ensure_ascii=False)
+        except Exception:
+            llm_input_text = None
+    llm_output_text: str | None = None
+    if llm_output_payload is not None:
+        try:
+            llm_output_text = json.dumps(llm_output_payload, ensure_ascii=False)
+        except Exception:
+            llm_output_text = None
     event = {
         "user_id": user_id,
         "endpoint": endpoint,
@@ -219,6 +232,8 @@ def _record_ai_usage(
         "output_tokens": usage.output_tokens if usage else 0,
         "total_tokens": usage.total_tokens if usage else 0,
         "latency_ms": latency_ms,
+        "llm_input_text": llm_input_text,
+        "llm_output_text": llm_output_text,
         "error_code": error_code,
         "error_message": error_message,
     }
@@ -232,14 +247,19 @@ def _resolve_app_apk_download_url(request: Request) -> str | None:
     explicit_url = settings.app_apk_download_url.strip()
     if explicit_url:
         return explicit_url
+    if _resolve_apk_file_path() is None:
+        return None
+    return f"{str(request.base_url).rstrip('/')}/app/download-apk"
+
+
+def _resolve_apk_file_path() -> Path | None:
     apk_file_name = Path(settings.app_apk_filename.strip()).name
     if not apk_file_name:
         return None
     apk_path = downloads_dir / apk_file_name
     if not apk_path.is_file():
         return None
-    encoded_name = quote(apk_file_name)
-    return f"{str(request.base_url).rstrip('/')}/downloads/{encoded_name}"
+    return apk_path
 
 
 async def _usage_worker() -> None:
@@ -305,6 +325,19 @@ async def app_version(request: Request, currentVersionCode: int = 0) -> JSONResp
         apkDownloadUrl=_resolve_app_apk_download_url(request),
     )
     return JSONResponse(status_code=200, content=response.model_dump())
+
+
+@app.get("/app/download-apk")
+async def app_download_apk() -> Response:
+    apk_path = _resolve_apk_file_path()
+    if apk_path is None:
+        return stable_error("app", "NOT_FOUND", "apk file not found", status=404)
+    return FileResponse(
+        path=str(apk_path),
+        media_type="application/vnd.android.package-archive",
+        filename=apk_path.name,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.post("/auth/signup")
@@ -539,12 +572,23 @@ async def input_interpret(request: Request) -> JSONResponse:
             system_prompt, user_prompt = input_prompts(transcript, selected_date)
             completion = await llm_client.json_completion(system_prompt, user_prompt)
             guarded = ensure_input_response(completion.payload, transcript, selected_date)
+            if not guarded.labels:
+                guarded = guarded.model_copy(
+                    update={
+                        "labels": infer_input_labels(
+                            transcript=transcript,
+                            summary=guarded.summary,
+                        )
+                    }
+                )
             _record_ai_usage(
                 endpoint="/ai/input-interpret",
                 user_id=user_id,
                 transcript=transcript,
                 success=True,
                 usage=completion.usage,
+                llm_input_payload={"system": system_prompt, "user": user_prompt},
+                llm_output_payload=completion.payload,
                 started_at=started_at,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
@@ -638,6 +682,8 @@ async def search_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=True,
                 usage=completion.usage,
+                llm_input_payload={"system": system_prompt, "user": user_prompt},
+                llm_output_payload=completion.payload,
                 started_at=started_at,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
@@ -746,6 +792,8 @@ async def refine_field(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=True,
                 usage=completion.usage,
+                llm_input_payload={"system": system_prompt, "user": user_prompt},
+                llm_output_payload=completion.payload,
                 started_at=started_at,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
@@ -852,6 +900,8 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=True,
                 usage=completion.usage,
+                llm_input_payload={"system": system_prompt, "user": user_prompt},
+                llm_output_payload=completion.payload,
                 started_at=started_at,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())

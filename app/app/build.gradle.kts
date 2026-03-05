@@ -127,7 +127,7 @@ android {
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("int", "AI_API_TIMEOUT_MS", project.stringProperty("AI_API_TIMEOUT_MS", "12000"))
+        buildConfigField("int", "AI_API_TIMEOUT_MS", project.stringProperty("AI_API_TIMEOUT_MS", "30000"))
         buildConfigField("int", "HOLIDAY_SYNC_TIMEOUT_MS", project.stringProperty("HOLIDAY_SYNC_TIMEOUT_MS", "5000"))
         buildConfigField(
             "boolean",

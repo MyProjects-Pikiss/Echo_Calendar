@@ -105,11 +105,42 @@
       border: 1px solid var(--line);
       border-radius: 10px;
     }
+    .pager {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .pager .page-btn {
+      min-width: 36px;
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .pager .page-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 700;
+    }
+    .pager .page-info {
+      color: var(--muted);
+      font-size: 13px;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
       min-width: 900px;
       background: #fff;
+    }
+    .events-table {
+      table-layout: fixed;
+      min-width: 1900px;
     }
     th, td {
       text-align: left;
@@ -125,16 +156,145 @@
       position: sticky;
       top: 0;
       z-index: 1;
+      user-select: none;
     }
-    td.transcript {
-      max-width: 430px;
+    .col-resizer {
+      position: absolute;
+      top: 0;
+      right: -3px;
+      width: 8px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 3;
+    }
+    .col-resizer::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 3px;
+      width: 2px;
+      background: #c4cedb;
+      border-radius: 2px;
+      opacity: 0.95;
+    }
+    .events-table th:hover .col-resizer::after {
+      background: #8ea3bf;
+    }
+    .events-table.resizing .col-resizer::after {
+      background: var(--accent);
+    }
+    .events-table.resizing {
+      cursor: col-resize;
+    }
+    .nowrap {
+      white-space: nowrap;
+    }
+    .events-table th.nowrap,
+    .events-table td.nowrap {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    td.cell-long {
       white-space: pre-wrap;
       word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    td.llm-cell {
+      padding: 4px 6px;
+    }
+    .llm-details {
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      padding: 0;
+    }
+    .llm-details > summary {
+      display: block;
+      cursor: pointer;
+      color: #2b4f78;
+      font-weight: 600;
+      font-size: 12px;
+      outline: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.15;
+      padding: 1px 5px;
+      border: 1px solid #d6deea;
+      border-radius: 7px;
+      background: #f8fbff;
+    }
+    .llm-details[open] {
+      border: 1px solid #d6deea;
+      background: #f8fbff;
+      padding: 4px 6px;
+    }
+    .llm-details[open] > summary {
+      margin-bottom: 4px;
+    }
+    .llm-content {
+      margin-top: 4px;
+      display: grid;
+      gap: 6px;
+    }
+    .llm-block {
+      border: 1px solid #dce6f5;
+      border-radius: 8px;
+      background: #fff;
+      padding: 8px;
+    }
+    .llm-key {
+      display: inline-block;
+      margin-bottom: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid #d4e0f2;
+      background: #f3f8ff;
+      color: #264c7a;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: lowercase;
+      letter-spacing: 0.2px;
+    }
+    .llm-text {
+      margin: 0;
+      padding: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #243447;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .llm-system-details {
+      border: 1px solid #e2e8f2;
+      border-radius: 8px;
+      background: #f9fbfe;
+      padding: 4px 6px;
+    }
+    .llm-system-details > summary {
+      cursor: pointer;
+      color: #5f6f85;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    td.cell-error {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 240px;
+      color: #7f1d1d;
     }
     .outlier-list {
       margin: 0;
       padding-left: 16px;
       color: var(--muted);
+    }
+    .hidden {
+      display: none !important;
     }
     @media (max-width: 900px) {
       .grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
@@ -158,6 +318,7 @@
       <div class="status" id="authStatus">로그인 필요</div>
     </section>
 
+    <div id="dashboardInner" class="hidden">
     <section class="card">
       <div class="grid">
         <div class="metric"><div class="k">전체 요청 수</div><div class="v" id="mRequestCount">-</div></div>
@@ -188,18 +349,48 @@
         <div class="metric"><div class="k">성공률</div><div class="v" id="uSuccessRate">-</div></div>
       </div>
       <div class="status" id="detailStatus"></div>
+      <div class="pager">
+        <label for="detailPageSize">페이지당</label>
+        <select id="detailPageSize">
+          <option value="10">10건</option>
+          <option value="20" selected>20건</option>
+          <option value="50">50건</option>
+        </select>
+        <button id="detailPrevBtn" class="secondary">이전</button>
+        <button id="detailNextBtn" class="secondary">다음</button>
+        <button id="llmExpandAllBtn" class="secondary">LLM 전체 열기</button>
+        <button id="llmCollapseAllBtn" class="secondary">LLM 전체 닫기</button>
+        <span id="detailPageInfo" class="page-info">0 / 0</span>
+        <div id="detailPages" class="row"></div>
+      </div>
       <div class="table-wrap" style="margin-top: 10px;">
-        <table>
+        <table id="eventsTable" class="events-table">
+          <colgroup>
+            <col style="width: 170px;" />
+            <col style="width: 120px;" />
+            <col style="width: 160px;" />
+            <col style="width: 60px;" />
+            <col style="width: 90px;" />
+            <col style="width: 90px;" />
+            <col style="width: 90px;" />
+            <col style="width: 90px;" />
+            <col style="width: 180px;" />
+            <col style="width: 180px;" />
+            <col style="width: 300px;" />
+            <col style="width: 220px;" />
+          </colgroup>
           <thead>
             <tr>
-              <th>시간</th>
-              <th>엔드포인트</th>
-              <th>모델</th>
-              <th>성공</th>
-              <th>입력 토큰</th>
-              <th>출력 토큰</th>
-              <th>총 토큰</th>
-              <th>지연(ms)</th>
+              <th class="nowrap">시간</th>
+              <th class="nowrap">엔드포인트</th>
+              <th class="nowrap">모델</th>
+              <th class="nowrap">성공</th>
+              <th class="nowrap">입력 토큰</th>
+              <th class="nowrap">출력 토큰</th>
+              <th class="nowrap">총 토큰</th>
+              <th class="nowrap">지연(ms)</th>
+              <th>LLM 입력</th>
+              <th>LLM 출력</th>
               <th>입력 내용</th>
               <th>오류</th>
             </tr>
@@ -237,12 +428,17 @@
         </table>
       </div>
     </section>
+    </div>
   </div>
 
   <script>
     const state = {
       token: localStorage.getItem("echo_usage_token") || "",
       users: [],
+      authenticated: false,
+      detailEvents: [],
+      detailPage: 1,
+      detailPageSize: 20,
     };
 
     const byId = (id) => document.getElementById(id);
@@ -296,6 +492,253 @@
       el.className = isError ? "status error" : "status";
     }
 
+    function setDashboardVisible(visible) {
+      const inner = byId("dashboardInner");
+      if (!inner) return;
+      inner.classList.toggle("hidden", !visible);
+    }
+
+    function clearDashboardData() {
+      byId("mRequestCount").textContent = "-";
+      byId("mTotalTokens").textContent = "-";
+      byId("mAvgTokens").textContent = "-";
+      byId("mSuccessRate").textContent = "-";
+      byId("userAvgTotal").textContent = "-";
+      byId("uRequestCount").textContent = "-";
+      byId("uTotalTokens").textContent = "-";
+      byId("uAvgTokens").textContent = "-";
+      byId("uSuccessRate").textContent = "-";
+      byId("eventsBody").innerHTML = "";
+      byId("usersBody").innerHTML = "";
+      byId("outliers").innerHTML = "";
+      byId("userSelect").innerHTML = "";
+      byId("detailPages").innerHTML = "";
+      byId("detailPageInfo").textContent = "0 / 0";
+      state.detailEvents = [];
+      state.detailPage = 1;
+    }
+
+    function lockDashboard(message = "로그인 필요") {
+      state.authenticated = false;
+      setDashboardVisible(false);
+      clearDashboardData();
+      setStatus("authStatus", message, true);
+    }
+
+    function unlockDashboard(message) {
+      state.authenticated = true;
+      setDashboardVisible(true);
+      setStatus("authStatus", message || "로그인 완료");
+    }
+
+    async function ensureAuthenticated() {
+      if (!state.token) {
+        lockDashboard("로그인 필요");
+        return false;
+      }
+      try {
+        const data = await api("/auth/me");
+        unlockDashboard(`인증 성공: ${data.user?.username || "unknown"}`);
+        return true;
+      } catch (err) {
+        state.token = "";
+        localStorage.removeItem("echo_usage_token");
+        lockDashboard(`인증 실패: ${err.message}`);
+        return false;
+      }
+    }
+
+    function getDetailPageCount() {
+      if (!state.detailEvents.length) return 0;
+      return Math.max(1, Math.ceil(state.detailEvents.length / state.detailPageSize));
+    }
+
+    function renderDetailPager() {
+      const pageCount = getDetailPageCount();
+      if (pageCount === 0) {
+        byId("detailPageInfo").textContent = "0 / 0";
+        byId("detailPages").innerHTML = "";
+        return;
+      }
+      state.detailPage = Math.min(Math.max(1, state.detailPage), pageCount);
+      byId("detailPageInfo").textContent = `${state.detailPage} / ${pageCount} (총 ${fmtInt(state.detailEvents.length)}건)`;
+
+      const pagesWrap = byId("detailPages");
+      pagesWrap.innerHTML = "";
+      const start = Math.max(1, state.detailPage - 3);
+      const end = Math.min(pageCount, start + 6);
+      for (let p = start; p <= end; p += 1) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = p === state.detailPage ? "page-btn active" : "page-btn";
+        btn.textContent = String(p);
+        btn.addEventListener("click", () => {
+          state.detailPage = p;
+          renderDetailEventsPage();
+          renderDetailPager();
+        });
+        pagesWrap.appendChild(btn);
+      }
+    }
+
+    function renderDetailEventsPage() {
+      const tbody = byId("eventsBody");
+      tbody.innerHTML = "";
+      const events = state.detailEvents || [];
+      if (!events.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="12">이 사용자의 로그가 없습니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      const startIdx = (state.detailPage - 1) * state.detailPageSize;
+      const pageEvents = events.slice(startIdx, startIdx + state.detailPageSize);
+      pageEvents.forEach((e) => {
+        const tr = document.createElement("tr");
+        const err = [e.errorCode, e.errorMessage].filter(Boolean).join(" / ");
+        const llmInput = e.llmInput || "-";
+        const llmOutput = e.llmOutput || "-";
+        const transcript = e.transcript || "-";
+        tr.innerHTML = `
+          <td class="nowrap">${fmtTime(e.createdAt)}</td>
+          <td class="nowrap" title="${esc(e.endpoint || "-")}">${esc(e.endpoint || "-")}</td>
+          <td class="nowrap" title="${esc(e.model || "-")}">${esc(e.model || "-")}</td>
+          <td class="nowrap">${e.success ? "Y" : "N"}</td>
+          <td class="nowrap">${fmtInt(e.inputTokens)}</td>
+          <td class="nowrap">${fmtInt(e.outputTokens)}</td>
+          <td class="nowrap">${fmtInt(e.totalTokens)}</td>
+          <td class="nowrap">${fmtInt(e.latencyMs)}</td>
+          <td class="cell-long llm-cell">${buildLlmCellHtml(llmInput, "input")}</td>
+          <td class="cell-long llm-cell">${buildLlmCellHtml(llmOutput, "output")}</td>
+          <td class="cell-long" title="${esc(transcript)}">${esc(transcript)}</td>
+          <td class="cell-error" title="${esc(err || "-")}">${esc(err || "-")}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      syncLlmColumnWidths();
+    }
+
+    function parseMaybeJson(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function toDisplayText(value) {
+      if (value === null || value === undefined) return "-";
+      if (typeof value === "string") return value;
+      return JSON.stringify(value, null, 2);
+    }
+
+    function buildLlmCellHtml(raw, kind = "input") {
+      const text = String(raw || "-");
+      const parsed = parseMaybeJson(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return `
+          <details class="llm-details">
+            <summary>열기</summary>
+            <div class="llm-content">
+              <div class="llm-block">
+                <pre class="llm-text">${esc(text)}</pre>
+              </div>
+            </div>
+          </details>
+        `;
+      }
+      const entries = Object.entries(parsed);
+      if (!entries.length) {
+        return `
+          <details class="llm-details">
+            <summary>열기</summary>
+            <div class="llm-content">
+              <div class="llm-block">
+                <pre class="llm-text">-</pre>
+              </div>
+            </div>
+          </details>
+        `;
+      }
+      const nonSystemEntries = entries.filter(([k]) => k.toLowerCase() !== "system");
+      const systemEntry = entries.find(([k]) => k.toLowerCase() === "system");
+
+      if (kind === "output") {
+        const compactObj = Object.fromEntries(nonSystemEntries);
+        const outputText = nonSystemEntries.length ? toDisplayText(compactObj) : text;
+        return `
+          <details class="llm-details">
+            <summary>열기 · 출력</summary>
+            <div class="llm-content">
+              <div class="llm-block">
+                <pre class="llm-text">${esc(outputText)}</pre>
+              </div>
+            </div>
+          </details>
+        `;
+      }
+
+      const summaryKeys = nonSystemEntries.map(([k]) => k).join(", ");
+      const summaryLabel = summaryKeys ? `열기 · ${summaryKeys}` : "열기";
+      const nonSystemBlocks = nonSystemEntries.length
+        ? nonSystemEntries.map(([k, v]) => `
+          <div class="llm-block">
+            <span class="llm-key">${esc(k)}</span>
+            <pre class="llm-text">${esc(toDisplayText(v))}</pre>
+          </div>
+        `).join("")
+        : `
+          <div class="llm-block">
+            <pre class="llm-text">표시할 항목이 없습니다.</pre>
+          </div>
+        `;
+      const systemBlock = systemEntry
+        ? `
+          <details class="llm-system-details">
+            <summary>시스템 프롬프트</summary>
+            <div class="llm-content">
+              <div class="llm-block">
+                <pre class="llm-text">${esc(toDisplayText(systemEntry[1]))}</pre>
+              </div>
+            </div>
+          </details>
+        `
+        : "";
+      return `
+        <details class="llm-details">
+          <summary title="${esc(summaryKeys || "LLM 내용")}">${esc(summaryLabel)}</summary>
+          <div class="llm-content">
+            ${nonSystemBlocks}
+            ${systemBlock}
+          </div>
+        </details>
+      `;
+    }
+
+    function syncLlmColumnWidths() {
+      const table = byId("eventsTable");
+      if (!table) return;
+      const cols = table.querySelectorAll("colgroup col");
+      if (!cols || cols.length < 10) return;
+      const hasOpen = byId("eventsBody").querySelector(".llm-details[open]") !== null;
+      const width = hasOpen ? 320 : 180;
+      cols[8].style.width = `${width}px`;
+      cols[9].style.width = `${width}px`;
+    }
+
+    function setupLlmInteractions() {
+      const tbody = byId("eventsBody");
+      if (!tbody || tbody.dataset.llmBound === "1") return;
+      tbody.dataset.llmBound = "1";
+      tbody.addEventListener("toggle", (event) => {
+        const details = event.target.closest(".llm-details");
+        if (!details) return;
+        syncLlmColumnWidths();
+      }, true);
+    }
+
     function renderOverview(data) {
       byId("mRequestCount").textContent = fmtInt(data.requestCount);
       byId("mTotalTokens").textContent = fmtInt(data.totalTokens);
@@ -340,33 +783,10 @@
       byId("uTotalTokens").textContent = fmtInt(data.totalTokens);
       byId("uAvgTokens").textContent = Number(data.avgTokensPerRequest || 0).toFixed(1);
       byId("uSuccessRate").textContent = fmtPct(data.successRate);
-
-      const tbody = byId("eventsBody");
-      tbody.innerHTML = "";
-      const events = data.events || [];
-      if (!events.length) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="10">이 사용자의 로그가 없습니다.</td>`;
-        tbody.appendChild(tr);
-        return;
-      }
-      for (const e of events) {
-        const tr = document.createElement("tr");
-        const err = [e.errorCode, e.errorMessage].filter(Boolean).join(" / ");
-        tr.innerHTML = `
-          <td>${fmtTime(e.createdAt)}</td>
-          <td>${esc(e.endpoint || "-")}</td>
-          <td>${esc(e.model || "-")}</td>
-          <td>${e.success ? "Y" : "N"}</td>
-          <td>${fmtInt(e.inputTokens)}</td>
-          <td>${fmtInt(e.outputTokens)}</td>
-          <td>${fmtInt(e.totalTokens)}</td>
-          <td>${fmtInt(e.latencyMs)}</td>
-          <td class="transcript">${esc(e.transcript)}</td>
-          <td>${esc(err || "-")}</td>
-        `;
-        tbody.appendChild(tr);
-      }
+      state.detailEvents = data.events || [];
+      state.detailPage = 1;
+      renderDetailEventsPage();
+      renderDetailPager();
     }
 
     function renderUsersTable(users) {
@@ -419,7 +839,7 @@
 
     async function loadDetail() {
       const userId = byId("userSelect").value;
-      const query = userId ? `?userId=${encodeURIComponent(userId)}&limit=150` : "?limit=150";
+      const query = userId ? `?userId=${encodeURIComponent(userId)}&limit=500` : "?limit=500";
       try {
         const data = await api(`/usage/user-detail${query}`);
         renderUserDetail(data);
@@ -464,6 +884,7 @@
     }
 
     async function reloadAll() {
+      if (!state.authenticated) return;
       await loadOverview();
       await loadUsers();
       await loadDetail();
@@ -488,20 +909,104 @@
         }
         state.token = data.accessToken || "";
         localStorage.setItem("echo_usage_token", state.token);
-        setStatus("authStatus", `인증 성공: ${data.user?.username || username}`);
-        await reloadAll();
+        const ok = await ensureAuthenticated();
+        if (ok) {
+          await reloadAll();
+        }
       } catch (err) {
-        setStatus("authStatus", `인증 실패: ${err.message}`, true);
+        lockDashboard(`인증 실패: ${err.message}`);
       }
+    }
+
+    function enableTableColumnResize(tableId) {
+      const table = byId(tableId);
+      if (!table || table.dataset.resizeBound === "1") return;
+      const headers = Array.from(table.querySelectorAll("thead th"));
+      const cols = Array.from(table.querySelectorAll("colgroup col"));
+      if (!headers.length || headers.length !== cols.length) return;
+      table.dataset.resizeBound = "1";
+
+      headers.forEach((th, index) => {
+        if (index === headers.length - 1) return;
+        th.style.position = "sticky";
+        const handle = document.createElement("span");
+        handle.className = "col-resizer";
+        th.appendChild(handle);
+
+        handle.addEventListener("mousedown", (downEvent) => {
+          downEvent.preventDefault();
+          const startX = downEvent.clientX;
+          const startWidth = cols[index].getBoundingClientRect().width;
+          const minWidth = 72;
+
+          const onMove = (moveEvent) => {
+            const delta = moveEvent.clientX - startX;
+            const next = Math.max(minWidth, Math.round(startWidth + delta));
+            cols[index].style.width = `${next}px`;
+            table.classList.add("resizing");
+          };
+
+          const onUp = () => {
+            table.classList.remove("resizing");
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+          };
+
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp);
+        });
+      });
     }
 
     byId("loginBtn").addEventListener("click", async () => { await loginOrSignup("/auth/login"); });
     byId("signupBtn").addEventListener("click", async () => { await loginOrSignup("/auth/signup"); });
     byId("refreshBtn").addEventListener("click", async () => {
+      if (!state.authenticated) return;
       await reloadAll();
     });
-    byId("detailBtn").addEventListener("click", async () => { await loadDetail(); });
+    byId("detailBtn").addEventListener("click", async () => {
+      if (!state.authenticated) return;
+      await loadDetail();
+    });
+    byId("detailPrevBtn").addEventListener("click", () => {
+      if (!state.authenticated) return;
+      if (state.detailPage <= 1) return;
+      state.detailPage -= 1;
+      renderDetailEventsPage();
+      renderDetailPager();
+    });
+    byId("detailNextBtn").addEventListener("click", () => {
+      if (!state.authenticated) return;
+      const pageCount = getDetailPageCount();
+      if (state.detailPage >= pageCount) return;
+      state.detailPage += 1;
+      renderDetailEventsPage();
+      renderDetailPager();
+    });
+    byId("llmExpandAllBtn").addEventListener("click", () => {
+      if (!state.authenticated) return;
+      for (const details of byId("eventsBody").querySelectorAll(".llm-details")) {
+        details.open = true;
+      }
+      syncLlmColumnWidths();
+    });
+    byId("llmCollapseAllBtn").addEventListener("click", () => {
+      if (!state.authenticated) return;
+      for (const details of byId("eventsBody").querySelectorAll(".llm-details")) {
+        details.open = false;
+      }
+      syncLlmColumnWidths();
+    });
+    byId("detailPageSize").addEventListener("change", (event) => {
+      if (!state.authenticated) return;
+      const value = Number(event.target.value || 20);
+      state.detailPageSize = [10, 20, 50].includes(value) ? value : 20;
+      state.detailPage = 1;
+      renderDetailEventsPage();
+      renderDetailPager();
+    });
     byId("createUserBtn").addEventListener("click", async () => {
+      if (!state.authenticated) return;
       try {
         await fetchUserCreate();
         setStatus("usersStatus", "계정 생성 완료");
@@ -511,9 +1016,17 @@
       }
     });
 
+    enableTableColumnResize("eventsTable");
+    setupLlmInteractions();
+
+    setDashboardVisible(false);
     if (state.token) {
-      setStatus("authStatus", "저장된 토큰으로 조회 시도 중...");
-      reloadAll();
+      setStatus("authStatus", "저장된 토큰으로 인증 확인 중...");
+      ensureAuthenticated().then((ok) => {
+        if (ok) {
+          reloadAll();
+        }
+      });
     }
   </script>
 </body>

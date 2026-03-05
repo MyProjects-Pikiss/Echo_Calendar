@@ -10,6 +10,60 @@ from .models import (
     SearchInterpretResponse,
 )
 
+MAX_INFERRED_LABELS = 5
+MAX_KEYWORD_INFERRED_LABELS = 3
+LABEL_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("병원", ("병원", "진료", "의원", "약국", "검사", "치과")),
+    ("업무", ("회의", "미팅", "업무", "프로젝트", "회사", "출근", "보고")),
+    ("금융", ("은행", "송금", "계좌", "카드", "결제", "청구서", "보험료")),
+    ("지출", ("쇼핑", "구매", "결제", "지출", "영수증")),
+    ("식사", ("점심", "저녁", "아침", "식사", "밥", "카페", "커피")),
+    ("학습", ("공부", "강의", "수업", "시험", "과제", "독서")),
+    ("약속", ("약속", "모임", "친구", "가족", "데이트", "회식")),
+    ("취미", ("운동", "헬스", "러닝", "게임", "영화", "여행")),
+    ("배달", ("배달", "택배", "배송", "도착")),
+    ("기록", ("기록", "메모", "일기", "정리")),
+]
+
+
+def _append_unique_label(target: list[str], candidate: str) -> None:
+    normalized = candidate.strip().lstrip("#")
+    if not normalized:
+        return
+    key = normalized.lower()
+    exists = any(item.lower() == key for item in target)
+    if not exists:
+        target.append(normalized)
+
+
+def _extract_explicit_labels(text: str) -> list[str]:
+    labels: list[str] = []
+    for matched in re.findall(r"#([\w\-가-힣]+)", text):
+        _append_unique_label(labels, matched)
+    inline_match = re.search(r"(?:라벨|태그)(?:은|:)?\s*([^\n]+)", text)
+    if inline_match:
+        for token in inline_match.group(1).split(","):
+            _append_unique_label(labels, token)
+    return labels
+
+
+def infer_input_labels(transcript: str, summary: str) -> list[str]:
+    labels: list[str] = _extract_explicit_labels(transcript)
+    if labels:
+        return labels[:MAX_INFERRED_LABELS]
+
+    joined = f"{transcript} {summary}".lower()
+    inferred_count = 0
+    for label, keywords in LABEL_KEYWORDS:
+        if any(keyword in joined for keyword in keywords):
+            _append_unique_label(labels, label)
+            inferred_count += 1
+        if inferred_count >= MAX_KEYWORD_INFERRED_LABELS:
+            break
+        if len(labels) >= MAX_INFERRED_LABELS:
+            break
+    return labels[:MAX_INFERRED_LABELS]
+
 
 def _normalize_time(text: str) -> str:
     match = re.search(r"(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?", text)
@@ -50,26 +104,23 @@ def local_input_interpret(transcript: str, selected_date: str) -> InputInterpret
     summary = re.sub(r"(추가해줘|추가|기록해줘|기록|일정|검색해줘|찾아줘)$", "", summary).strip()
     if len(summary) > 25:
         summary = summary[:25]
+    category_id = "other"
     return InputInterpretResponse(
         intent=_detect_intent(transcript),  # type: ignore[arg-type]
         date=_detect_date(transcript, selected_date),
         summary=summary or "일정",
         time=_normalize_time(transcript),
         repeatYearly=_detect_repeat_yearly(transcript),
-        categoryId="other",
+        categoryId=category_id,
         placeText="",
         body=transcript.strip(),
-        labels=[],
+        labels=infer_input_labels(transcript, summary or "일정"),
         missingRequired=[],
     )
 
 
 def local_search_interpret(transcript: str) -> SearchInterpretResponse:
-    labels: list[str] = []
-    for matched in re.findall(r"#([\w\-가-힣]+)", transcript):
-        token = matched.strip()
-        if token and token not in labels:
-            labels.append(token)
+    labels = _extract_explicit_labels(transcript)
     inline_match = re.search(r"(?:라벨|태그)(?:은|:)?\s*([^\n]+)", transcript)
     if inline_match:
         for token in inline_match.group(1).split(","):

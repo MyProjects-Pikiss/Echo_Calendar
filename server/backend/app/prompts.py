@@ -33,6 +33,8 @@ def input_prompts(transcript: str, selected_date: str) -> tuple[str, str]:
         "repeatYearly must be true/false/null. Use true for birthday or yearly recurring intent. "
         f"categoryId should be one of: {', '.join(KNOWN_CATEGORY_IDS)}. "
         "If uncertain, use categoryId='other'. "
+        "labels are optional search-assist tags, return 0..5 items. "
+        "Prefer concise reusable labels; avoid creating too many specific one-off labels. "
         "Example input: '내일 9시 회의'. "
         "Example output: {'mode':'input','intent':'create','date':'2026-02-11','summary':'회의','time':'09:00','repeatYearly':null,"
         "'categoryId':'work','placeText':'','body':'내일 9시 회의','labels':['팀'],'missingRequired':[]}."

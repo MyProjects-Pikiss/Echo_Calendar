@@ -11,5 +11,10 @@ object SettingsKeys {
     const val ALARM_ALERT_MODE_VIBRATE = "vibrate"
     const val ALARM_ALERT_MODE_SILENT = "silent"
 
+    const val KEY_THEME_MODE = "theme_mode"
+    const val THEME_MODE_SYSTEM = "system"
+    const val THEME_MODE_LIGHT = "light"
+    const val THEME_MODE_DARK = "dark"
+
     const val KEY_USAGE_ACCESS_TOKEN = "usage_access_token"
 }

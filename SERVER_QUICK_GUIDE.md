@@ -4,6 +4,7 @@
 아래 파일들로 서버 실행/동기화 준비를 빠르게 할 수 있습니다.
 
 - `server\RUN_ALL_SERVERS.bat`: 통합 서버 실행 (권장)
+- `server\RUN_ECHO_TUNNEL.bat`: 터널만 실행 (서버 BAT는 별도 실행)
 - `server\RUN_BACKEND_COMMON.bat`: 공통 사전 준비만 실행 (내부용)
 - `server\SYNC_HOLIDAYS_NOW.bat`: 휴일 데이터 즉시 동기화(수동 실행)
 - `server\SYNC_HOLIDAYS_WINDOW_5Y.bat`: 오늘 기준 앞/뒤 5년 범위만 갱신
