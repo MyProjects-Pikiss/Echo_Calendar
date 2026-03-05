@@ -19,6 +19,7 @@ local.properties
 .env.*
 *.env
 !server/SERVER_ENV_TEMPLATE.env
+!app/APP_SIGNING_TEMPLATE.env
 
 # Local tooling artifacts
 .gradle-local/
@@ -42,3 +43,16 @@ server/tools/**/*.pyc
 # APK build artifacts for server-side distribution
 server/downloads/*.apk
 !server/downloads/.gitkeep
+
+# Android app build outputs
+app/**/build/
+app/app/release/
+app/app/debug/
+*.apk
+*.aab
+
+# Android signing key files
+*.jks
+*.keystore
+keystore.properties
+app/keystore.properties

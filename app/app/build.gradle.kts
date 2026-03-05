@@ -41,6 +41,50 @@ fun File.readKeyValueConfig(): Map<String, String> {
 
 fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
+fun expandConfigPath(raw: String): String {
+    var value = raw.trim().trim('"', '\'')
+    val percentPattern = Regex("%([A-Za-z0-9_]+)%")
+    value = percentPattern.replace(value) { match ->
+        System.getenv(match.groupValues[1]) ?: match.value
+    }
+    val bracePattern = Regex("\\$\\{([A-Za-z0-9_]+)\\}")
+    value = bracePattern.replace(value) { match ->
+        System.getenv(match.groupValues[1]) ?: match.value
+    }
+    if (value.startsWith("~")) {
+        value = System.getProperty("user.home") + value.removePrefix("~")
+    }
+    return value
+}
+
+fun Project.resolvePathConfigFile(configFileName: String): File? {
+    val configFile = rootProject.file(configFileName)
+    if (!configFile.isFile) return null
+
+    val rawPath = configFile.readLines()
+        .asSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() && !it.startsWith("#") }
+        ?: return null
+
+    val pathValue = if (rawPath.contains("=")) {
+        val idx = rawPath.indexOf('=')
+        val key = rawPath.substring(0, idx).trim()
+        val value = rawPath.substring(idx + 1).trim()
+        if (key !in setOf("SIGNING_CONFIG_FILE_PATH", "RELEASE_SIGNING_FILE_PATH", "APP_SIGNING_FILE_PATH")) {
+            return null
+        }
+        value
+    } else {
+        rawPath
+    }
+
+    if (pathValue.isBlank()) return null
+    val expanded = expandConfigPath(pathValue)
+    val candidate = File(expanded)
+    return if (candidate.isAbsolute) candidate else rootProject.file(expanded)
+}
+
 // 앱 기본 서버/버전 설정은 app/APP_CLIENT_CONFIG.txt 에서 읽습니다.
 val appClientConfigFile = rootProject.projectDir.resolve("APP_CLIENT_CONFIG.txt")
 val appClientConfig = appClientConfigFile.readKeyValueConfig()
@@ -58,6 +102,18 @@ val appVersionName = appClientConfig["APP_VERSION_NAME"]
     ?: error("APP_CLIENT_CONFIG.txt: APP_VERSION_NAME is required (e.g. 1.1.0)")
 val defaultAiApiBaseUrl = appDefaultServerBaseUrl
 val defaultHolidaySyncUrl = "$appDefaultServerBaseUrl/holidays"
+val signingConfigFile = project.resolvePathConfigFile("APP_SIGNING_PATH.txt")
+val signingFileConfig = signingConfigFile?.readKeyValueConfig().orEmpty()
+val releaseStoreFile = signingFileConfig["storeFile"]?.trim().orEmpty()
+val releaseStorePassword = signingFileConfig["storePassword"]?.trim().orEmpty()
+val releaseKeyAlias = signingFileConfig["keyAlias"]?.trim().orEmpty()
+val releaseKeyPassword = signingFileConfig["keyPassword"]?.trim().orEmpty()
+val hasReleaseSigningConfig = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.echo.echocalendar"
@@ -78,6 +134,17 @@ android {
             "ALLOW_SIGNUP",
             project.booleanProperty("ALLOW_SIGNUP", false).toString()
         )
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigningConfig) {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -116,6 +183,9 @@ android {
             )
         }
         release {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             manifestPlaceholders["usesCleartextTraffic"] = "false"
             buildConfigField(

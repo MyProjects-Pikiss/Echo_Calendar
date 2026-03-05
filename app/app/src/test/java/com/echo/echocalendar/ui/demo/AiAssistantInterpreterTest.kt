@@ -70,6 +70,7 @@ class AiAssistantInterpreterTest {
     fun assistantService_throwsWhenApiUnavailable() = runBlocking {
         val service = AiAssistantService(
             apiGateway = object : AiApiGateway {
+                override suspend fun checkAppUpdate(currentVersionCode: Int) = null
                 override suspend fun interpretInput(transcript: String, selectedDate: LocalDate) = null
                 override suspend fun interpretSearch(transcript: String) = null
                 override suspend fun interpretModify(

@@ -33,7 +33,7 @@ if not exist "%PATH_CONFIG_FILE%" (
     echo # Echo Calendar AI launcher config
     echo # Format: KEY=VALUE
     echo # This file points to your local env file where OPENAI_API_KEY is stored.
-    echo OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\SERVER_ENV_TEMPLATE.env
+    echo OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\Echo_Calendar\SERVER_ENV_TEMPLATE.env
   ) > "%PATH_CONFIG_FILE%"
   echo [INFO] Created path config: %PATH_CONFIG_FILE%
 )

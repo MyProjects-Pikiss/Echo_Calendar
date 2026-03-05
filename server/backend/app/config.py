@@ -75,6 +75,7 @@ def _load_local_env_files() -> None:
         env_files.append(Path(_expand_env_path(external_env)).expanduser())
 
     env_files.append(Path.home() / ".echo_calendar_ai.env")
+    env_files.append(Path.home() / "Echo_Calendar" / "SERVER_ENV_TEMPLATE.env")
     env_files.append(Path.home() / "SERVER_ENV_TEMPLATE.env")
 
     seen: set[str] = set()
@@ -102,6 +103,7 @@ class Settings:
     llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "12"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "1"))
     llm_deadline_seconds: float = float(os.getenv("LLM_DEADLINE_SECONDS", "15"))
+    llm_max_output_tokens: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "256"))
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
     enable_local_fallback: bool = False
     holiday_api_key: str = os.getenv("KOREA_HOLIDAY_API_KEY", "").strip()

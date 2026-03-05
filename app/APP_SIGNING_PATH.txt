@@ -1,0 +1,7 @@
+# Echo Calendar app signing path config
+# Format: KEY=VALUE
+# Point this to a local file outside git repo that contains release signing values.
+# Example (Windows): SIGNING_CONFIG_FILE_PATH=%USERPROFILE%\Echo_Calendar\echo_calendar_signing.env
+# Example (WSL/Linux): SIGNING_CONFIG_FILE_PATH=~/.echo_calendar_signing.env
+
+SIGNING_CONFIG_FILE_PATH=%USERPROFILE%\Echo_Calendar\echo_calendar_signing.env
