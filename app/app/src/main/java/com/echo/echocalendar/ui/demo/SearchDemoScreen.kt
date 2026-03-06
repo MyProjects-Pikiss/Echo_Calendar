@@ -32,6 +32,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.echo.echocalendar.data.local.CategoryDefaults
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_ASC
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_DESC
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -118,6 +120,22 @@ fun SearchDemoScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "정렬", style = MaterialTheme.typography.labelLarge)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = searchViewModel.sortOrderFilter == SORT_DESC,
+                onClick = { searchViewModel.onSortOrderChange(SORT_DESC) },
+                label = { Text("최신순") }
+            )
+            FilterChip(
+                selected = searchViewModel.sortOrderFilter == SORT_ASC,
+                onClick = { searchViewModel.onSortOrderChange(SORT_ASC) },
+                label = { Text("오래된순") }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "카테고리 필터",
             style = MaterialTheme.typography.labelLarge
@@ -173,6 +191,8 @@ fun SearchDemoScreen(
         }
         val hasFilters = searchViewModel.dateFromFilter != null ||
             searchViewModel.dateToFilter != null ||
+            searchViewModel.sortOrderFilter != SORT_DESC ||
+            searchViewModel.strategyFilter != AiSearchStrategy.Combined ||
             searchViewModel.categoryFilters.isNotEmpty() ||
             searchViewModel.labelFilters.isNotEmpty()
         if (hasFilters) {
@@ -204,6 +224,20 @@ fun SearchDemoScreen(
                         selected = true,
                         onClick = searchViewModel::clearDateToFilter,
                         label = { Text("종료일: $to ✕") }
+                    )
+                }
+                if (searchViewModel.sortOrderFilter == SORT_ASC) {
+                    FilterChip(
+                        selected = true,
+                        onClick = { searchViewModel.onSortOrderChange(SORT_DESC) },
+                        label = { Text("정렬: 오래된순 ✕") }
+                    )
+                }
+                if (searchViewModel.strategyFilter == AiSearchStrategy.AllEvents) {
+                    FilterChip(
+                        selected = true,
+                        onClick = searchViewModel::clearAllEventsStrategy,
+                        label = { Text("전략: 전체조회 ✕") }
                     )
                 }
                 searchViewModel.categoryFilters.forEach { filter ->

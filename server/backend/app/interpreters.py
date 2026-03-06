@@ -7,6 +7,7 @@ from .models import (
     InputInterpretResponse,
     ModifyInterpretResponse,
     RefineFieldResponse,
+    SearchStrategy,
     SearchInterpretResponse,
 )
 
@@ -23,6 +24,13 @@ LABEL_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("취미", ("운동", "헬스", "러닝", "게임", "영화", "여행")),
     ("배달", ("배달", "택배", "배송", "도착")),
     ("기록", ("기록", "메모", "일기", "정리")),
+]
+
+SEARCH_CATEGORY_HINTS: list[tuple[str, tuple[str, ...]]] = [
+    ("medical", ("병원", "진료", "의원", "치과", "약국")),
+    ("work", ("업무", "회의", "미팅", "프로젝트", "회사")),
+    ("dining", ("식사", "점심", "저녁", "카페", "커피")),
+    ("delivery", ("택배", "배송", "배달")),
 ]
 
 
@@ -120,7 +128,11 @@ def local_input_interpret(transcript: str, selected_date: str) -> InputInterpret
 
 
 def local_search_interpret(transcript: str) -> SearchInterpretResponse:
+    wants_all_records = _contains_all_records_intent(transcript)
     labels = _extract_explicit_labels(transcript)
+    category_source = re.sub(r"(?:라벨|태그)(?:은|:)?\s*[^\n]+", " ", transcript)
+    category_source = re.sub(r"#([\w\-가-힣]+)", " ", category_source)
+    category_ids = _extract_search_category_ids(category_source)
     inline_match = re.search(r"(?:라벨|태그)(?:은|:)?\s*([^\n]+)", transcript)
     if inline_match:
         for token in inline_match.group(1).split(","):
@@ -128,14 +140,157 @@ def local_search_interpret(transcript: str) -> SearchInterpretResponse:
             if normalized and normalized not in labels:
                 labels.append(normalized)
 
-    query = re.sub(r"(검색|찾아줘|찾기|보여줘)", "", transcript).strip()
+    date_from, date_to = _extract_search_date_range(transcript)
+    sort_order = _extract_search_sort_order(transcript)
+
+    query = re.sub(r"(검색|찾아줘|찾기|보여줘)", "", transcript)
+    query = re.sub(r"(?:여태까지|지금까지|전체|전부|모든)\s*(?:기록|일정)?", "", query)
+    query = re.sub(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*(?:부터|에서)\s*\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*까지", "", query)
+    query = re.sub(r"\d{1,2}[./-]\d{1,2}\s*(?:부터|에서)\s*\d{1,2}[./-]\d{1,2}\s*까지", "", query)
+    query = re.sub(r"\d{1,2}일\s*(?:부터|에서)\s*\d{1,2}일\s*까지", "", query)
+    query = re.sub(r"(최신순|최근순|오래된순|예전순|오름차순|내림차순)(?:으로|로)?", "", query)
     if inline_match:
-        query = query.replace(inline_match.group(0), "").strip()
-    return SearchInterpretResponse(
-        query=query or transcript.strip(),
-        categoryIds=[],
+        query = query.replace(inline_match.group(0), "")
+    query = re.sub(r"\s+", " ", query).strip()
+    resolved_query = "*" if wants_all_records else query
+    if not resolved_query and date_from is None and date_to is None and not labels:
+        resolved_query = transcript.strip()
+    strategy = _infer_search_strategy(
+        forced_all=wants_all_records,
+        query=resolved_query,
+        date_from=date_from,
+        date_to=date_to,
+        category_ids=category_ids,
         labels=labels,
     )
+
+    return SearchInterpretResponse(
+        strategy=strategy,
+        query=resolved_query,
+        dateFrom=date_from,
+        dateTo=date_to,
+        sortOrder=sort_order,
+        categoryIds=[] if strategy == "all_events" else category_ids,
+        labels=[] if strategy == "all_events" else labels,
+    )
+
+
+def _extract_search_sort_order(text: str) -> str:
+    lowered = text.lower()
+    if any(token in lowered for token in ("오래된순", "예전순", "오름차순")):
+        return "asc"
+    return "desc"
+
+
+def _extract_search_date_range(text: str) -> tuple[str | None, str | None]:
+    today = date.today()
+    if _contains_all_records_intent(text):
+        return None, None
+
+    explicit = re.search(
+        r"(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s*(?:부터|에서)\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s*까지",
+        text,
+    )
+    if explicit:
+        parsed = _parse_search_date_token(explicit.group(1), today), _parse_search_date_token(explicit.group(2), today)
+        if parsed[0] and parsed[1]:
+            return _normalize_date_range(parsed[0], parsed[1])
+
+    month_day = re.search(r"(\d{1,2}[./-]\d{1,2})\s*(?:부터|에서)\s*(\d{1,2}[./-]\d{1,2})\s*까지", text)
+    if month_day:
+        parsed = _parse_search_date_token(month_day.group(1), today), _parse_search_date_token(month_day.group(2), today)
+        if parsed[0] and parsed[1]:
+            return _normalize_date_range(parsed[0], parsed[1])
+
+    day_only = re.search(r"(\d{1,2})일\s*(?:부터|에서)\s*(\d{1,2})일\s*까지", text)
+    if day_only:
+        start_day = int(day_only.group(1))
+        end_day = int(day_only.group(2))
+        if 1 <= start_day <= 31 and 1 <= end_day <= 31:
+            start = date(today.year, today.month, min(start_day, _days_in_month(today.year, today.month)))
+            end = date(today.year, today.month, min(end_day, _days_in_month(today.year, today.month)))
+            return _normalize_date_range(start, end)
+    return None, None
+
+
+def _parse_search_date_token(token: str, today: date) -> date | None:
+    normalized = token.strip().replace(".", "-").replace("/", "-")
+    parts = [part for part in normalized.split("-") if part]
+    if len(parts) == 3 and all(part.isdigit() for part in parts):
+        year, month, day = map(int, parts)
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+    if len(parts) == 2 and all(part.isdigit() for part in parts):
+        month, day = map(int, parts)
+        try:
+            return date(today.year, month, day)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_date_range(start: date, end: date) -> tuple[str, str]:
+    if start <= end:
+        return start.isoformat(), end.isoformat()
+    return end.isoformat(), start.isoformat()
+
+
+def _days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        return 31
+    return (date(year, month + 1, 1) - timedelta(days=1)).day
+
+
+def _contains_all_records_intent(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text)
+    has_all_token = any(token in compact for token in ("여태까지", "지금까지", "전체", "전부", "모든"))
+    has_record_token = any(token in compact for token in ("기록", "일정", "이벤트"))
+    return has_all_token and has_record_token
+
+
+def _extract_search_category_ids(text: str) -> list[str]:
+    lowered = text.lower()
+    out: list[str] = []
+    for category_id, keywords in SEARCH_CATEGORY_HINTS:
+        if category_id in lowered or any(keyword in text for keyword in keywords):
+            if category_id not in out:
+                out.append(category_id)
+    return out
+
+
+def _infer_search_strategy(
+    *,
+    forced_all: bool,
+    query: str,
+    date_from: str | None,
+    date_to: str | None,
+    category_ids: list[str],
+    labels: list[str],
+) -> SearchStrategy:
+    if forced_all:
+        return "all_events"
+    has_date = bool(date_from or date_to)
+    has_category = bool(category_ids)
+    has_label = bool(labels)
+    has_query = bool(query and query != "*" and not _is_generic_search_query(query))
+    active = [has_date, has_category, has_label, has_query]
+    if sum(1 for item in active if item) >= 2:
+        return "combined"
+    if has_date:
+        return "date_range"
+    if has_category:
+        return "category"
+    if has_label:
+        return "label"
+    if has_query:
+        return "keyword"
+    return "combined"
+
+
+def _is_generic_search_query(query: str) -> bool:
+    return query.strip() in {"기록", "일정", "이벤트", "기록들"}
 
 
 def local_refine_field(field: str, transcript: str, current_value: str) -> RefineFieldResponse:

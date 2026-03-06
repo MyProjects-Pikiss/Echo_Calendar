@@ -11,16 +11,25 @@ import java.util.Locale
 class SearchEventsUseCase(
     private val database: AppDatabase
 ) {
+    companion object {
+        const val SORT_DESC = "desc"
+        const val SORT_ASC = "asc"
+        const val STRATEGY_ALL_EVENTS = "all_events"
+    }
+
     suspend operator fun invoke(
         query: String,
         dateFrom: String? = null,
         dateTo: String? = null,
+        sortOrder: String? = null,
+        strategy: String? = null,
         categoryIds: List<String> = emptyList(),
         labelNames: List<String> = emptyList(),
         zoneId: ZoneId = ZoneId.of("Asia/Seoul")
     ): List<EventEntity> {
         val trimmed = query.trim()
-        val baseResults = if (trimmed.isEmpty()) {
+        val strategyNormalized = strategy?.trim()?.lowercase(Locale.ROOT)
+        val baseResults = if (strategyNormalized == STRATEGY_ALL_EVENTS || trimmed.isEmpty() || trimmed == "*") {
             database.eventDao().getAll()
         } else {
             val ftsQuery = buildSafeFtsQuery(trimmed)
@@ -55,7 +64,7 @@ class SearchEventsUseCase(
             emptySet()
         }
 
-        return baseResults.filter { event ->
+        val filtered = baseResults.filter { event ->
             if (categoryIdSet.isNotEmpty() && event.categoryId !in categoryIdSet) {
                 return@filter false
             }
@@ -75,6 +84,10 @@ class SearchEventsUseCase(
                 return@filter false
             }
             true
+        }
+        return when (sortOrder?.trim()?.lowercase(Locale.ROOT)) {
+            SORT_ASC -> filtered.sortedWith(compareBy<EventEntity> { it.occurredAt }.thenBy { it.updatedAt })
+            else -> filtered.sortedWith(compareByDescending<EventEntity> { it.occurredAt }.thenByDescending { it.updatedAt })
         }
     }
 }

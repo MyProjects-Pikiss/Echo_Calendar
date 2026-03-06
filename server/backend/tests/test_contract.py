@@ -61,7 +61,9 @@ def test_search_success_includes_labels():
     assert response.status_code == 200
     data = response.json()
     assert data["mode"] == "search"
+    assert data["strategy"] in {"combined", "all_events", "date_range", "category", "label", "keyword"}
     assert "labels" in data
+    assert data["sortOrder"] in {"asc", "desc"}
 
 
 def test_modify_success_includes_patch_fields():

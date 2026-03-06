@@ -2,6 +2,7 @@ package com.echo.echocalendar.ui.demo
 
 import com.echo.echocalendar.data.local.CategoryDefaults
 import java.time.LocalDate
+import java.time.ZoneId
 
 object AiAssistantInterpreter {
     fun suggestInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion {
@@ -33,24 +34,51 @@ object AiAssistantInterpreter {
     }
 
     fun suggestSearchQuery(transcript: String): AiSearchSuggestion {
+        val wantsAllRecords = containsAllRecordsIntent(transcript)
+        val dateRange = extractDateRange(transcript)
+        val sortOrder = extractSortOrder(transcript)
         val labelNames = extractLabels(transcript)
+        val categorySource = transcript
+            .replace(Regex("""(?:라벨|태그)(?:은|:)?\s*[^\n]+"""), " ")
+            .replace(Regex("""#([\p{L}\p{N}_-]+)"""), " ")
+        val categoryIds = extractSearchCategoryIds(categorySource)
         val cleaned = transcript
             .replace(Regex("""(?:라벨|태그)(?:은|:)?\s*[^\n]+"""), " ")
+            .replace(Regex("""\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*(?:부터|에서)\s*\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*까지"""), " ")
+            .replace(Regex("""\d{1,2}일\s*(?:부터|에서)\s*\d{1,2}일\s*까지"""), " ")
+            .replace(Regex("""(?:여태까지|지금까지|전체|전부|모든)\s*(?:기록|일정)?"""), " ")
+            .replace(Regex("""(?:최신순|최근순|오래된순|오름차순|내림차순)(?:으로|로)?"""), " ")
             .replace("검색", "")
             .replace("찾아줘", "")
             .replace("찾아 줘", "")
             .replace("보여줘", "")
             .replace("보여 줘", "")
+            .replace(Regex("""\s+"""), " ")
             .trim()
-        val query = if (cleaned.isNotBlank()) {
+        val query = if (wantsAllRecords) {
+            "*"
+        } else if (cleaned.isNotBlank()) {
             cleaned
         } else if (labelNames.isNotEmpty()) {
             ""
         } else {
             transcript.trim()
         }
-        return AiSearchSuggestion(
+        val strategy = inferSearchStrategy(
+            forcedAll = wantsAllRecords,
             query = query,
+            dateFrom = dateRange.first,
+            dateTo = dateRange.second,
+            categoryIds = categoryIds,
+            labels = labelNames
+        )
+        return AiSearchSuggestion(
+            strategy = strategy,
+            query = query,
+            dateFrom = dateRange.first,
+            dateTo = dateRange.second,
+            sortOrder = sortOrder,
+            categoryIds = categoryIds,
             labelNames = labelNames
         )
     }
@@ -148,5 +176,111 @@ object AiAssistantInterpreter {
             .filter { it.isNotBlank() }
             .toList()
         return (inlineLabels + hashtagLabels).distinct()
+    }
+
+    private fun extractSearchCategoryIds(source: String): List<String> {
+        return CategoryDefaults.categories
+            .filter { category ->
+                category.id !in setOf("record", "other") &&
+                    (
+                        source.contains(category.displayName, ignoreCase = true) ||
+                            source.contains(category.id, ignoreCase = true)
+                        )
+            }
+            .map { it.id }
+            .distinct()
+    }
+
+    private fun extractDateRange(source: String): Pair<String?, String?> {
+        val text = source.trim()
+        if (containsAllRecordsIntent(text)) {
+            return null to null
+        }
+
+        val explicit = Regex(
+            """(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s*(?:부터|에서)\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})\s*까지"""
+        ).find(text)
+        if (explicit != null) {
+            val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+            val from = normalizeDateToken(explicit.groupValues[1], today) ?: return null to null
+            val to = normalizeDateToken(explicit.groupValues[2], today) ?: return null to null
+            return if (from <= to) Pair(from, to) else Pair(to, from)
+        }
+
+        val dayOnly = Regex("""(\d{1,2})일\s*(?:부터|에서)\s*(\d{1,2})일\s*까지""").find(text)
+        if (dayOnly != null) {
+            val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+            val fromDay = dayOnly.groupValues[1].toIntOrNull()
+            val toDay = dayOnly.groupValues[2].toIntOrNull()
+            if (fromDay != null && toDay != null && fromDay in 1..31 && toDay in 1..31) {
+                val a = today.withDayOfMonth(fromDay.coerceAtMost(today.lengthOfMonth()))
+                val b = today.withDayOfMonth(toDay.coerceAtMost(today.lengthOfMonth()))
+                return if (a <= b) Pair(a.toString(), b.toString()) else Pair(b.toString(), a.toString())
+            }
+        }
+        return null to null
+    }
+
+    private fun containsAllRecordsIntent(source: String): Boolean {
+        val normalized = source.replace(Regex("""\s+"""), "")
+        val hasAllToken = listOf("여태까지", "지금까지", "전체", "전부", "모든").any { normalized.contains(it) }
+        val hasRecordToken = listOf("기록", "일정", "이벤트").any { normalized.contains(it) }
+        return hasAllToken && hasRecordToken
+    }
+
+    private fun normalizeDateToken(raw: String, today: LocalDate): String? {
+        val token = raw.trim().replace('.', '-').replace('/', '-')
+        val parts = token.split("-").filter { it.isNotBlank() }
+        return when (parts.size) {
+            3 -> {
+                val year = parts[0].toIntOrNull() ?: return null
+                val month = parts[1].toIntOrNull() ?: return null
+                val day = parts[2].toIntOrNull() ?: return null
+                runCatching { LocalDate.of(year, month, day).toString() }.getOrNull()
+            }
+            2 -> {
+                val month = parts[0].toIntOrNull() ?: return null
+                val day = parts[1].toIntOrNull() ?: return null
+                runCatching { LocalDate.of(today.year, month, day).toString() }.getOrNull()
+            }
+            else -> null
+        }
+    }
+
+    private fun extractSortOrder(source: String): String? {
+        val normalized = source.lowercase()
+        return when {
+            listOf("오래된순", "예전순", "오름차순").any { normalized.contains(it) } -> "asc"
+            listOf("최신순", "최근순", "내림차순").any { normalized.contains(it) } -> "desc"
+            else -> null
+        }
+    }
+
+    private fun inferSearchStrategy(
+        forcedAll: Boolean,
+        query: String,
+        dateFrom: String?,
+        dateTo: String?,
+        categoryIds: List<String>,
+        labels: List<String>
+    ): AiSearchStrategy {
+        if (forcedAll) return AiSearchStrategy.AllEvents
+        val hasDateRange = dateFrom != null || dateTo != null
+        val hasCategory = categoryIds.isNotEmpty()
+        val hasLabel = labels.isNotEmpty()
+        val hasQuery = query.isNotBlank() && query != "*" && !isGenericSearchQuery(query)
+        val activeKinds = listOf(hasDateRange, hasCategory, hasLabel, hasQuery).count { it }
+        if (activeKinds >= 2) return AiSearchStrategy.Combined
+        return when {
+            hasDateRange -> AiSearchStrategy.DateRange
+            hasCategory -> AiSearchStrategy.Category
+            hasLabel -> AiSearchStrategy.Label
+            hasQuery -> AiSearchStrategy.Keyword
+            else -> AiSearchStrategy.Combined
+        }
+    }
+
+    private fun isGenericSearchQuery(query: String): Boolean {
+        return query.trim() in setOf("기록", "일정", "이벤트", "기록들")
     }
 }

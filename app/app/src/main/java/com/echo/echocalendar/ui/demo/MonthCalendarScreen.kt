@@ -15,12 +15,15 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +64,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,6 +88,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -143,6 +148,10 @@ fun MonthCalendarScreen(
     var isSettingsOpen by remember { mutableStateOf(false) }
     var isProfileOpen by remember { mutableStateOf(false) }
     var isAiSearchResultOpen by remember { mutableStateOf(false) }
+    var isEventListPanelOpen by remember { mutableStateOf(false) }
+    var eventListSortOrder by remember { mutableStateOf("desc") }
+    var eventListCategoryFilter by remember { mutableStateOf("all") }
+    var isEventListCategoryMenuOpen by remember { mutableStateOf(false) }
     var aiSearchSuggestion by remember { mutableStateOf<AiSearchSuggestion?>(null) }
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -330,7 +339,8 @@ fun MonthCalendarScreen(
                     try {
                         val result = aiAssistantService.suggestSearch(transcript)
                         val suggestion = result.suggestion
-                        if (suggestion.query.isBlank() &&
+                        if (suggestion.strategy != AiSearchStrategy.AllEvents &&
+                            suggestion.query.isBlank() &&
                             suggestion.dateFrom.isNullOrBlank() &&
                             suggestion.dateTo.isNullOrBlank() &&
                             suggestion.categoryIds.isEmpty() &&
@@ -577,6 +587,7 @@ fun MonthCalendarScreen(
         val sectionGap = (maxHeight * 0.01f).coerceIn(4.dp, 10.dp)
         val calendarInnerGap = (maxHeight * 0.008f).coerceIn(2.dp, 8.dp)
         val eventListMaxHeight = (maxHeight * 0.2f).coerceIn(110.dp, 220.dp)
+        val swipePanelWidth = (maxWidth * 0.86f).coerceIn(260.dp, 420.dp)
         val detailVerticalGap = (maxHeight * 0.01f).coerceIn(6.dp, 12.dp)
         val eventItemGap = (maxHeight * 0.008f).coerceIn(4.dp, 8.dp)
         val eventCardHorizontalPadding = (maxWidth * 0.014f).coerceIn(10.dp, 16.dp)
@@ -594,6 +605,25 @@ fun MonthCalendarScreen(
             maxWidth >= 900.dp -> 2.0f
             else -> 1.8f
         }
+        val monthEvents = remember(calendarViewModel.eventsByDate, shownMonth) {
+            calendarViewModel.eventsByDate.entries
+                .asSequence()
+                .filter { YearMonth.from(it.key) == shownMonth }
+                .flatMap { it.value.asSequence() }
+                .distinctBy { it.id }
+                .toList()
+        }
+        val filteredMonthEvents = remember(monthEvents, eventListCategoryFilter, eventListSortOrder) {
+            val base = if (eventListCategoryFilter == "all") {
+                monthEvents
+            } else {
+                monthEvents.filter { it.categoryId == eventListCategoryFilter }
+            }
+            when (eventListSortOrder) {
+                "asc" -> base.sortedWith(compareBy<com.echo.echocalendar.data.local.EventEntity> { it.occurredAt }.thenBy { it.updatedAt })
+                else -> base.sortedWith(compareByDescending<com.echo.echocalendar.data.local.EventEntity> { it.occurredAt }.thenByDescending { it.updatedAt })
+            }
+        }
         val maxWidthPx = with(density) { maxWidth.toPx() }
         val popupWidthPx = with(density) { popupWidth.toPx() }
         val anchorFraction = if (activeTrigger == InputTrigger.Keyboard) 0.25f else 0.75f
@@ -607,6 +637,11 @@ fun MonthCalendarScreen(
             animationSpec = tween(durationMillis = 180),
             label = "ActionPickerOffset"
         )
+        LaunchedEffect(isWideScreen) {
+            if (isWideScreen) {
+                isEventListPanelOpen = false
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -665,6 +700,15 @@ fun MonthCalendarScreen(
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!isWideScreen) {
+                            TextButton(
+                                onClick = { isEventListPanelOpen = true },
+                                contentPadding = PaddingValues(horizontal = todayButtonHorizontalPadding, vertical = 0.dp),
+                                modifier = Modifier.height(headerIconButtonSize)
+                            ) {
+                                Text(text = "목록")
+                            }
+                        }
                         TextButton(
                             onClick = {
                                 shownMonth = YearMonth.from(today)
@@ -966,6 +1010,190 @@ fun MonthCalendarScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isWideScreen) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(20.dp)
+                    .pointerInput(Unit) {
+                        var dragDistance = 0f
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (dragDistance < -70f) {
+                                    isEventListPanelOpen = true
+                                }
+                                dragDistance = 0f
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                dragDistance += dragAmount
+                            }
+                        )
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = !isWideScreen && isEventListPanelOpen,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(swipePanelWidth)
+                .navigationBarsPadding()
+                .padding(bottom = bottomBarHeight + 8.dp),
+            enter = slideInHorizontally(
+                animationSpec = tween(220),
+                initialOffsetX = { it }
+            ) + fadeIn(animationSpec = tween(220)),
+            exit = slideOutHorizontally(
+                animationSpec = tween(180),
+                targetOffsetX = { it }
+            ) + fadeOut(animationSpec = tween(180))
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        var dragDistance = 0f
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (dragDistance > 70f) {
+                                    isEventListPanelOpen = false
+                                }
+                                dragDistance = 0f
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                dragDistance += dragAmount
+                            }
+                        )
+                    },
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 4.dp,
+                shadowElevation = 4.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${monthFormatter.format(shownMonth.atDay(1))} 이벤트",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { isEventListPanelOpen = false }) {
+                            Text("닫기")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = eventListSortOrder == "desc",
+                            onClick = { eventListSortOrder = "desc" },
+                            label = { Text("최신순") }
+                        )
+                        FilterChip(
+                            selected = eventListSortOrder == "asc",
+                            onClick = { eventListSortOrder = "asc" },
+                            label = { Text("오래된순") }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "카테고리: ${
+                                if (eventListCategoryFilter == "all") {
+                                    "전체"
+                                } else {
+                                    CategoryDefaults.categories.firstOrNull { it.id == eventListCategoryFilter }?.displayName
+                                        ?: eventListCategoryFilter
+                                }
+                            }",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { isEventListCategoryMenuOpen = true }) {
+                            Text("선택")
+                        }
+                        DropdownMenu(
+                            expanded = isEventListCategoryMenuOpen,
+                            onDismissRequest = { isEventListCategoryMenuOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("전체") },
+                                onClick = {
+                                    eventListCategoryFilter = "all"
+                                    isEventListCategoryMenuOpen = false
+                                }
+                            )
+                            CategoryDefaults.categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category.displayName) },
+                                    onClick = {
+                                        eventListCategoryFilter = category.id
+                                        isEventListCategoryMenuOpen = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                    if (filteredMonthEvents.isEmpty()) {
+                        Text(
+                            text = "조건에 맞는 이벤트가 없습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(filteredMonthEvents) { event ->
+                                val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
+                                    .atZone(zoneId)
+                                    .toLocalDateTime()
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            calendarViewModel.onDateSelected(eventDateTime.toLocalDate())
+                                            selectedEvent = event
+                                        }
+                                ) {
+                                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                                        Text(
+                                            text = event.summary,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "${eventDateTime.toLocalDate().format(dateFormatter)} ${timeFormatter.format(eventDateTime)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }

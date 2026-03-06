@@ -43,6 +43,7 @@ class AiAssistantInterpreterTest {
     fun suggestSearchQuery_removesSearchVerbs() {
         val suggestion = AiAssistantInterpreter.suggestSearchQuery("회의 일정 검색 찾아줘")
 
+        assertEquals(AiSearchStrategy.Keyword, suggestion.strategy)
         assertEquals("회의 일정", suggestion.query)
     }
 
@@ -50,8 +51,30 @@ class AiAssistantInterpreterTest {
     fun suggestSearchQuery_extractsLabelFilters() {
         val suggestion = AiAssistantInterpreter.suggestSearchQuery("라벨: 병원, 정기 #검진 검색")
 
+        assertEquals(AiSearchStrategy.Label, suggestion.strategy)
         assertEquals("", suggestion.query)
         assertEquals(listOf("병원", "정기", "검진"), suggestion.labelNames)
+    }
+
+    @Test
+    fun suggestSearchQuery_extractsDateRangeAndSortOrder() {
+        val suggestion = AiAssistantInterpreter.suggestSearchQuery("2026-01-02부터 2026-01-20까지 기록 오래된순으로 찾아줘")
+
+        assertEquals(AiSearchStrategy.DateRange, suggestion.strategy)
+        assertEquals("기록", suggestion.query)
+        assertEquals("2026-01-02", suggestion.dateFrom)
+        assertEquals("2026-01-20", suggestion.dateTo)
+        assertEquals("asc", suggestion.sortOrder)
+    }
+
+    @Test
+    fun suggestSearchQuery_allHistoryMeansAllEvents() {
+        val suggestion = AiAssistantInterpreter.suggestSearchQuery("여태까지 한 모든 기록 찾아줘")
+
+        assertEquals(AiSearchStrategy.AllEvents, suggestion.strategy)
+        assertEquals("*", suggestion.query)
+        assertEquals(null, suggestion.dateFrom)
+        assertEquals(null, suggestion.dateTo)
     }
 
     @Test

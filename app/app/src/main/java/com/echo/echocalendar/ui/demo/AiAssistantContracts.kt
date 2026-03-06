@@ -24,6 +24,15 @@ enum class AiCrudIntent(val value: String) {
     Delete("delete")
 }
 
+enum class AiSearchStrategy(val value: String) {
+    Combined("combined"),
+    AllEvents("all_events"),
+    DateRange("date_range"),
+    Category("category"),
+    Label("label"),
+    Keyword("keyword")
+}
+
 data class AiInputSuggestion(
     val date: LocalDate,
     val intent: AiCrudIntent,
@@ -38,9 +47,11 @@ data class AiInputSuggestion(
 )
 
 data class AiSearchSuggestion(
+    val strategy: AiSearchStrategy = AiSearchStrategy.Combined,
     val query: String,
     val dateFrom: String? = null,
     val dateTo: String? = null,
+    val sortOrder: String? = null,
     val categoryIds: List<String> = emptyList(),
     val labelNames: List<String> = emptyList()
 )

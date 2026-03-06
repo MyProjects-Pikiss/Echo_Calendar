@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 AiMode = Literal["input", "search", "refine", "modify"]
 DraftField = Literal["summary", "time", "category", "place", "labels", "body"]
 CrudIntent = Literal["create", "update", "delete"]
+SearchStrategy = Literal["combined", "all_events", "date_range", "category", "label", "keyword"]
 
 
 class InputInterpretRequest(BaseModel):
@@ -58,9 +59,11 @@ class SearchInterpretRequest(BaseModel):
 
 class SearchInterpretResponse(BaseModel):
     mode: Literal["search"] = "search"
+    strategy: SearchStrategy = "combined"
     query: str = ""
     dateFrom: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     dateTo: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    sortOrder: Literal["asc", "desc"] = "desc"
     categoryIds: list[str] = []
     labels: list[str] = []
 

@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.domain.usecase.MAX_LABELS_PER_EVENT
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_ASC
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_DESC
 import com.echo.echocalendar.domain.usecase.SearchEventsUseCase
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -35,6 +37,10 @@ class SearchViewModel(
         private set
     var labelFilters by mutableStateOf<List<String>>(emptyList())
         private set
+    var sortOrderFilter by mutableStateOf(SORT_DESC)
+        private set
+    var strategyFilter by mutableStateOf(AiSearchStrategy.Combined)
+        private set
     var aiFiltersApplied by mutableStateOf(false)
         private set
 
@@ -44,6 +50,10 @@ class SearchViewModel(
 
     fun onQueryChange(newQuery: String) {
         query = newQuery
+        if (strategyFilter == AiSearchStrategy.AllEvents && newQuery.trim() != "*") {
+            strategyFilter = AiSearchStrategy.Combined
+            aiFiltersApplied = false
+        }
     }
 
     fun onSearchSubmit() {
@@ -69,6 +79,8 @@ class SearchViewModel(
             query = currentQuery,
             dateFrom = dateFromFilter,
             dateTo = dateToFilter,
+            sortOrder = sortOrderFilter,
+            strategy = strategyFilter,
             categoryIds = categoryFilters.sorted(),
             labelNames = labelFilters
                 .sorted()
@@ -84,6 +96,8 @@ class SearchViewModel(
                     query = requestKey.query,
                     dateFrom = requestKey.dateFrom,
                     dateTo = requestKey.dateTo,
+                    sortOrder = requestKey.sortOrder,
+                    strategy = requestKey.strategy.value,
                     categoryIds = requestKey.categoryIds,
                     labelNames = requestKey.labelNames
                 )
@@ -99,8 +113,10 @@ class SearchViewModel(
 
     fun applyAiSearchSuggestion(suggestion: AiSearchSuggestion) {
         query = suggestion.query
+        strategyFilter = suggestion.strategy
         dateFromFilter = suggestion.dateFrom?.trim()?.ifBlank { null }
         dateToFilter = suggestion.dateTo?.trim()?.ifBlank { null }
+        sortOrderFilter = normalizeSortOrder(suggestion.sortOrder)
         categoryFilters = suggestion.categoryIds
             .map { it.trim() }
             .filter { it.isNotBlank() }
@@ -157,6 +173,24 @@ class SearchViewModel(
         refreshAfterFilterMutation()
     }
 
+    fun onSortOrderChange(order: String) {
+        val normalized = normalizeSortOrder(order)
+        if (normalized == sortOrderFilter) return
+        sortOrderFilter = normalized
+        aiFiltersApplied = false
+        refreshAfterFilterMutation()
+    }
+
+    fun clearAllEventsStrategy() {
+        if (strategyFilter != AiSearchStrategy.AllEvents) return
+        strategyFilter = AiSearchStrategy.Combined
+        if (query.trim() == "*") {
+            query = ""
+        }
+        aiFiltersApplied = false
+        refreshAfterFilterMutation()
+    }
+
     fun toggleCategoryFilter(categoryId: String) {
         val id = categoryId.trim()
         if (id.isBlank()) return
@@ -190,6 +224,8 @@ class SearchViewModel(
         dateToFilter = null
         categoryFilters = emptyList()
         labelFilters = emptyList()
+        sortOrderFilter = SORT_DESC
+        strategyFilter = AiSearchStrategy.Combined
         aiFiltersApplied = false
         refreshAfterFilterMutation()
     }
@@ -206,6 +242,8 @@ class SearchViewModel(
         dateToFilter = null
         categoryFilters = emptyList()
         labelFilters = emptyList()
+        sortOrderFilter = SORT_DESC
+        strategyFilter = AiSearchStrategy.Combined
         aiFiltersApplied = false
         lastExecutedKey = null
     }
@@ -222,8 +260,17 @@ class SearchViewModel(
     private fun hasActiveFilters(): Boolean {
         return dateFromFilter != null ||
             dateToFilter != null ||
+            sortOrderFilter != SORT_DESC ||
+            strategyFilter != AiSearchStrategy.Combined ||
             categoryFilters.isNotEmpty() ||
             labelFilters.isNotEmpty()
+    }
+
+    private fun normalizeSortOrder(value: String?): String {
+        return when (value?.trim()?.lowercase()) {
+            SORT_ASC -> SORT_ASC
+            else -> SORT_DESC
+        }
     }
 
     private fun validateFilters(dateFrom: String?, dateTo: String?): String? {
@@ -255,6 +302,8 @@ data class SearchRequestKey(
     val query: String,
     val dateFrom: String?,
     val dateTo: String?,
+    val sortOrder: String,
+    val strategy: AiSearchStrategy,
     val categoryIds: List<String>,
     val labelNames: List<String>
 )

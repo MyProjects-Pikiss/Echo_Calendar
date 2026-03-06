@@ -1,4 +1,4 @@
-# Echo Calendar 통합 명세서 (v1.4)
+# Echo Calendar 통합 명세서 (v1.5)
 
 작성일: 2026-02-27  
 문서 정책: 본 문서가 제품/기능/API/운영/검증의 단일 기준 문서(Single Source)다.  
@@ -149,9 +149,11 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.2).md` 기준.
 ```json
 {
   "mode": "search",
+  "strategy": "combined",
   "query": "병원 일정",
   "dateFrom": "2026-02-01",
   "dateTo": "2026-02-07",
+  "sortOrder": "desc",
   "categoryIds": ["medical"],
   "labels": ["병원 검진"]
 }
@@ -159,11 +161,39 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.2).md` 기준.
 
 Search 응답 유효성 규칙:
 
+- `strategy`는 아래 중 하나여야 함
+1. `combined`
+2. `all_events`
+3. `date_range`
+4. `category`
+5. `label`
+6. `keyword`
+
 - 아래 중 하나 이상 만족하면 유효
 1. `query`가 비어있지 않음
 2. `dateFrom/dateTo/categoryIds/labels` 중 하나 이상 존재
 
 즉, filters-only(`query=""`) 응답을 허용한다.
+
+전략별 실행 규칙:
+
+1. `all_events`
+   - 의미: 저장된 모든 이벤트 조회(미래 일정 포함)
+   - 권장 페이로드: `query="*"`, `dateFrom/dateTo=null`, `categoryIds=[]`, `labels=[]`
+2. `date_range`
+   - 의미: 기간 필터 기반 조회
+   - 권장 페이로드: `dateFrom/dateTo` 중심
+3. `category`
+   - 의미: 카테고리 필터 기반 조회
+   - 권장 페이로드: `categoryIds` 중심
+4. `label`
+   - 의미: 라벨 필터 기반 조회
+   - 권장 페이로드: `labels` 중심
+5. `keyword`
+   - 의미: 키워드(FTS) 기반 조회
+   - 권장 페이로드: `query` 중심
+6. `combined`
+   - 의미: 위 메커니즘 2개 이상 조합 조회
 
 ### 6.3 Refine Field
 
@@ -267,7 +297,7 @@ python server/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:808
 ### 9.3 E2E 스모크
 
 - AI 입력: transcript -> suggestion popup
-- AI 검색: transcript -> query/filters -> 결과 목록
+- AI 검색: transcript -> strategy + query/filters -> 결과 목록
 - 필드 보완: target field only
 - 원격 실패 시 fallback 메시지
 - labels-only 검색 응답 동작 확인

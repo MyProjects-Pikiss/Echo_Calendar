@@ -3,6 +3,8 @@ package com.echo.echocalendar.ui.demo
 import android.util.Log
 import com.echo.echocalendar.BuildConfig
 import com.echo.echocalendar.data.local.CategoryDefaults
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_ASC
+import com.echo.echocalendar.domain.usecase.SearchEventsUseCase.Companion.SORT_DESC
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URI
@@ -91,9 +93,14 @@ class HttpAiApiGateway(
             .put("transcript", transcript)
         val json = postJson("/ai/search-interpret", request) ?: return null
         if (json.optString("mode") != AiMode.Search.value) return null
+        val strategy = parseSearchStrategy(json.optNullableString("strategy"))
         val query = json.optString("query").trim()
         val dateFrom = json.optNullableString("dateFrom")
         val dateTo = json.optNullableString("dateTo")
+        val sortOrder = when (json.optNullableString("sortOrder")?.trim()?.lowercase()) {
+            SORT_ASC -> SORT_ASC
+            else -> SORT_DESC
+        }
         val categoryIds = json.optJSONArray("categoryIds")
             .toStringList()
             .mapNotNull(::normalizeCategoryIdOrNull)
@@ -103,16 +110,24 @@ class HttpAiApiGateway(
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
-        if (query.isBlank() && dateFrom.isNullOrBlank() && dateTo.isNullOrBlank() &&
+        if (strategy != AiSearchStrategy.AllEvents &&
+            query.isBlank() && dateFrom.isNullOrBlank() && dateTo.isNullOrBlank() &&
             categoryIds.isEmpty() && labelNames.isEmpty()
         ) return null
         return AiSearchSuggestion(
+            strategy = strategy,
             query = query,
             dateFrom = dateFrom,
             dateTo = dateTo,
+            sortOrder = sortOrder,
             categoryIds = categoryIds,
             labelNames = labelNames
         )
+    }
+
+    private fun parseSearchStrategy(raw: String?): AiSearchStrategy {
+        val normalized = raw?.trim()?.lowercase().orEmpty()
+        return AiSearchStrategy.entries.firstOrNull { it.value == normalized } ?: AiSearchStrategy.Combined
     }
 
     override suspend fun refineField(

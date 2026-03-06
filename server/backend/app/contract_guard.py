@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -15,6 +16,9 @@ from .prompts import KNOWN_CATEGORY_IDS
 
 class ContractValidationError(Exception):
     pass
+
+
+VALID_SEARCH_STRATEGIES = {"combined", "all_events", "date_range", "category", "label", "keyword"}
 
 
 def _trimmed_text(value: Any) -> str:
@@ -86,9 +90,13 @@ def ensure_input_response(raw: dict[str, Any], transcript: str, selected_date: s
 def ensure_search_response(raw: dict[str, Any], transcript: str) -> SearchInterpretResponse:
     candidate = dict(raw)
     candidate["mode"] = "search"
+    strategy = _trimmed_text(candidate.get("strategy")).lower()
+    candidate["strategy"] = strategy if strategy in VALID_SEARCH_STRATEGIES else "combined"
     candidate["query"] = _trimmed_text(candidate.get("query"))
     candidate["dateFrom"] = _trimmed_text(candidate.get("dateFrom")) or None
     candidate["dateTo"] = _trimmed_text(candidate.get("dateTo")) or None
+    sort_order = _trimmed_text(candidate.get("sortOrder")).lower()
+    candidate["sortOrder"] = "asc" if sort_order == "asc" else "desc"
     candidate["categoryIds"] = _normalize_string_list(candidate.get("categoryIds"))
     candidate["categoryIds"] = [item for item in candidate["categoryIds"] if item in KNOWN_CATEGORY_IDS]
     candidate["labels"] = _limit_labels(_normalize_string_list(candidate.get("labels")))
@@ -99,7 +107,31 @@ def ensure_search_response(raw: dict[str, Any], transcript: str) -> SearchInterp
         and not candidate["categoryIds"]
         and not candidate["labels"]
     ):
-        candidate["query"] = transcript.strip()
+        if _contains_all_records_intent(transcript):
+            candidate["strategy"] = "all_events"
+            candidate["query"] = "*"
+        else:
+            candidate["query"] = transcript.strip()
+            if candidate["strategy"] == "combined":
+                candidate["strategy"] = "keyword"
+
+    if candidate["strategy"] == "all_events":
+        candidate["query"] = "*"
+        candidate["dateFrom"] = None
+        candidate["dateTo"] = None
+        candidate["categoryIds"] = []
+        candidate["labels"] = []
+    elif candidate["query"] == "*" and not candidate["dateFrom"] and not candidate["dateTo"] and not candidate["categoryIds"] and not candidate["labels"]:
+        candidate["strategy"] = "all_events"
+
+    if candidate["strategy"] == "combined":
+        candidate["strategy"] = _infer_strategy_from_fields(
+            query=candidate["query"],
+            date_from=candidate["dateFrom"],
+            date_to=candidate["dateTo"],
+            category_ids=candidate["categoryIds"],
+            labels=candidate["labels"],
+        )
     try:
         return SearchInterpretResponse.model_validate(candidate)
     except ValidationError as exc:
@@ -154,3 +186,40 @@ def ensure_modify_response(raw: dict[str, Any], transcript: str) -> ModifyInterp
         return ModifyInterpretResponse.model_validate(candidate)
     except ValidationError as exc:
         raise ContractValidationError(str(exc)) from exc
+
+
+def _contains_all_records_intent(text: str) -> bool:
+    compact = re.sub(r"\s+", "", str(text))
+    has_all_token = any(token in compact for token in ("여태까지", "지금까지", "전체", "전부", "모든"))
+    has_record_token = any(token in compact for token in ("기록", "일정", "이벤트"))
+    return has_all_token and has_record_token
+
+
+def _infer_strategy_from_fields(
+    *,
+    query: str,
+    date_from: str | None,
+    date_to: str | None,
+    category_ids: list[str],
+    labels: list[str],
+) -> str:
+    has_date = bool(date_from or date_to)
+    has_category = bool(category_ids)
+    has_label = bool(labels)
+    has_query = bool(query and query != "*" and not _is_generic_search_query(query))
+    active = [has_date, has_category, has_label, has_query]
+    if sum(1 for item in active if item) >= 2:
+        return "combined"
+    if has_date:
+        return "date_range"
+    if has_category:
+        return "category"
+    if has_label:
+        return "label"
+    if has_query:
+        return "keyword"
+    return "combined"
+
+
+def _is_generic_search_query(query: str) -> bool:
+    return query.strip() in {"기록", "일정", "이벤트", "기록들"}

@@ -105,18 +105,33 @@ class Handler(BaseHTTPRequestHandler):
         today = date.today()
         date_from = None
         date_to = None
+        sort_order = "desc"
+        strategy = "keyword"
+        query = transcript.replace("찾아줘", "").replace("검색", "").strip()
         if "지난주" in transcript:
             end = today - timedelta(days=today.weekday() + 1)
             start = end - timedelta(days=6)
             date_from, date_to = start.isoformat(), end.isoformat()
+            strategy = "date_range"
+        if any(token in transcript for token in ("여태까지", "지금까지", "전체", "전부", "모든")) and any(
+            token in transcript for token in ("기록", "일정", "이벤트")
+        ):
+            query = "*"
+            date_from = None
+            date_to = None
+            strategy = "all_events"
+        if any(token in transcript for token in ("오래된순", "예전순", "오름차순")):
+            sort_order = "asc"
 
         self._json_response(
             200,
             {
                 "mode": "search",
-                "query": transcript.replace("찾아줘", "").replace("검색", "").strip(),
+                "strategy": strategy,
+                "query": query,
                 "dateFrom": date_from,
                 "dateTo": date_to,
+                "sortOrder": sort_order,
                 "categoryIds": ["medical"] if "병원" in transcript else [],
                 "labels": labels,
             },

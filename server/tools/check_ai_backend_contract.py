@@ -79,7 +79,7 @@ def main() -> int:
     if status != 200:
         failures.append(f"[search] expected 200, got {status}: {data}")
     else:
-        failures.extend(expect_keys("search", data, ["mode", "query", "categoryIds", "labels"]))
+        failures.extend(expect_keys("search", data, ["mode", "strategy", "query", "sortOrder", "categoryIds", "labels"]))
         if data.get("mode") != "search":
             failures.append(f"[search] mode mismatch: {data.get('mode')}")
     if show_response:
