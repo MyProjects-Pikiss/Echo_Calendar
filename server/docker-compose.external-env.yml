@@ -1,0 +1,11 @@
+services:
+  backend:
+    environment:
+      OPENAI_ENV_FILE: /run/config/backend-external.env
+    volumes:
+      - ${BACKEND_EXTERNAL_ENV_PATH:?set BACKEND_EXTERNAL_ENV_PATH in server/.env}:/run/config/backend-external.env:ro
+  usage-consumer:
+    environment:
+      OPENAI_ENV_FILE: /run/config/backend-external.env
+    volumes:
+      - ${BACKEND_EXTERNAL_ENV_PATH:?set BACKEND_EXTERNAL_ENV_PATH in server/.env}:/run/config/backend-external.env:ro

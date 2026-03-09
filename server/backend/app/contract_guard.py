@@ -234,10 +234,14 @@ def _resolve_input_category_id(
 ) -> str:
     text = f"{transcript} {summary} {body}".strip()
     explicit = _extract_explicit_input_category(text)
+    scored = _infer_scored_input_category(text)
     if explicit is not None:
+        # Delivery hints are often embedded in schedule context such as "배달일 끝나고".
+        # Let the scored category win when it finds a stronger non-delivery signal.
+        if explicit == "delivery" and scored is not None and scored != "delivery":
+            return scored
         return explicit
 
-    scored = _infer_scored_input_category(text)
     if scored is not None:
         return scored
 

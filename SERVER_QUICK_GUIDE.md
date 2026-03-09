@@ -1,133 +1,137 @@
 # Echo Calendar Server 실행 가이드
 
-실행 파일은 `server` 폴더에 모아뒀습니다.
-아래 파일들로 서버 실행/동기화 준비를 빠르게 할 수 있습니다.
+이 프로젝트의 백엔드 운영 기준은 `server/` 폴더의 Docker Compose 구성입니다.
+백엔드 서버, 외부 env 파일, Cloudflare Tunnel까지 `server/` 폴더 기준으로 실행합니다.
 
-- `server\RUN_ALL_SERVERS.bat`: 통합 서버 실행 (권장)
-- `server\RUN_ECHO_TUNNEL.bat`: 터널만 실행 (서버 BAT는 별도 실행)
-- `server\RUN_BACKEND_COMMON.bat`: 공통 사전 준비만 실행 (내부용)
-- `server\SYNC_HOLIDAYS_NOW.bat`: 휴일 데이터 즉시 동기화(수동 실행)
-- `server\SYNC_HOLIDAYS_WINDOW_5Y.bat`: 오늘 기준 앞/뒤 5년 범위만 갱신
-- `server\SERVER_ENV_PATH.txt`: 외부 env 파일 경로 설정 파일
-- `server\SERVER_ENV_TEMPLATE.env`: 외부 env 파일 내용 템플릿
+## 1) 준비 파일
 
-## 1) 사전 준비 (최초 1회)
+- `server/.env`: 외부 env 파일 경로와 Cloudflare Tunnel 폴더 경로
+- `server/docker.defaults.env`: Docker 기본 env 값
+- `server/docker-compose.yml`: 백엔드 기본 실행
+- `server/docker-compose.external-env.yml`: 외부 env 파일 마운트
+- `server/docker-compose.tunnel.yml`: Cloudflare Tunnel 실행
 
-아래 설정은 모든 실행 방식의 공통 선행 조건입니다.
+## 2) 사전 준비
 
-1. `server\SERVER_ENV_PATH.txt`를 열고 `OPENAI_API_KEY_FILE_PATH=...` 경로를 정합니다.
-   - 기본값: `%USERPROFILE%\SERVER_ENV_TEMPLATE.env`
-2. `server\SERVER_ENV_TEMPLATE.env` 파일을 복제(복사-붙여넣기)해서 위 경로에 둡니다. (프로젝트 폴더 밖 권장)
-3. AI 기능까지 쓰려면 `OPENAI_API_KEY=sk-xxxx`를 실제 키로 바꿉니다.
-4. 휴일 동기화를 쓰려면 같은 파일에 `KOREA_HOLIDAY_API_KEY=`를 공공데이터포털 키로 채웁니다.
-5. `server\RUN_BACKEND_COMMON.bat` 실행 (세팅/의존성 준비)
-6. `server\RUN_ALL_SERVERS.bat` 실행 (통합 서버 시작)
+1. 외부 env 파일을 준비합니다.
+   - 예: `C:\Users\wnstk\Echo_Calendar\SERVER_ENV_TEMPLATE.env`
+2. `server/.env`의 경로를 현재 PC에 맞게 수정합니다.
+```env
+BACKEND_EXTERNAL_ENV_PATH=C:\Users\wnstk\Echo_Calendar\SERVER_ENV_TEMPLATE.env
+CLOUDFLARED_DIR=C:\Users\wnstk\.cloudflared
+```
 
-보안 권장:
-- 실제 키 파일(`SERVER_ENV_TEMPLATE.env`)은 프로젝트 폴더 밖에 유지
-- Git에는 `server\SERVER_ENV_PATH.txt`(경로 정보)와 `server\SERVER_ENV_TEMPLATE.env`(키 없는 템플릿)만 포함
+3. 외부 env 파일에 실제 키와 운영 값을 채웁니다.
+   - `OPENAI_API_KEY`
+   - `KOREA_HOLIDAY_API_KEY`
+   - `USAGE_ADMIN_USERNAME`
+   - `USAGE_ADMIN_PASSWORD`
+   - `APP_APK_DOWNLOAD_URL`
+4. Cloudflare Tunnel의 `config.yml`이 Docker 기준인지 확인합니다.
 
-## 2) 서버 실행 방법
+```yaml
+tunnel: echo-calendar
+credentials-file: /etc/cloudflared/<tunnel-credentials>.json
 
-사전 준비(1번) 완료 후 아래 실행 파일을 사용합니다.
+ingress:
+  - hostname: echo-calendar.win
+    service: http://backend:8088
+  - service: http_status:404
+```
 
-- 동시 실행(권장): `server\RUN_ALL_SERVERS.bat`
-  - 통합 서버(`8088`)를 새 창으로 실행
-- 통합 서버 엔드포인트: `/ai/*`, `/auth/*`, `/usage/*`, `/holidays`, `/health`, `/downloads/*`
-- 회원가입 차단(임시 운영): env에 `ALLOW_SIGNUP=false` 설정 시 `/auth/signup`이 403으로 차단됩니다.
-## 3) 앱 연결 기준
+## 3) 실행 방법
 
-- 앱 기본 설정 파일: `app\APP_CLIENT_CONFIG.txt`
-  - `SERVER_BASE_URL`, `APP_VERSION_CODE`, `APP_VERSION_NAME` 값을 앱 빌드에서 직접 읽습니다.
-- Android 에뮬레이터 debug 실행 기본 주소는 `http://10.0.2.2:8088`
-- 서버 창은 테스트 중 닫지 말고 유지
-- 앱 버전 체크 API: `GET /app/version?currentVersionCode=<정수>`
-  - `APP_LATEST_VERSION_CODE`, `APP_LATEST_VERSION_NAME`, `APP_MIN_SUPPORTED_VERSION_CODE`, `APP_APK_DOWNLOAD_URL` 값을 `SERVER_ENV_TEMPLATE.env`(실사용 env 파일)에서 설정하면 앱이 구버전에서 업데이트 안내를 표시합니다.
+### 백엔드 + 외부 env
 
-## 3-2) APK 서버 배포(서버 폴더 방식)
+```powershell
+cd server
+docker compose -f docker-compose.yml -f docker-compose.external-env.yml up --build
+```
 
-아래는 **도메인 + 서버 폴더**만으로 APK 업데이트 링크를 배포하는 기본 절차입니다.
+### 백엔드 + 외부 env + Cloudflare Tunnel
 
-1. 앱 릴리즈 APK를 빌드합니다.
-   - 예: `app\app\build\outputs\apk\release\app-release.apk`
-2. 서버 폴더의 `server\downloads\`에 APK를 복사합니다.
-   - 권장 파일명: `echo-calendar-latest.apk`
-3. 서버 env 파일(`SERVER_ENV_PATH.txt`로 지정한 실사용 env)에 아래 값을 맞춥니다.
+```powershell
+cd server
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.external-env.yml \
+  -f docker-compose.tunnel.yml \
+  up --build -d
+```
+
+### 개발 모드
+
+```powershell
+cd server
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.external-env.yml \
+  -f docker-compose.dev.yml \
+  up --build
+```
+
+## 4) 앱 연결 기준
+
+- 앱 설정 파일: `app/APP_CLIENT_CONFIG.txt`
+- 운영 도메인 기준:
+  - `SERVER_BASE_URL=https://echo-calendar.win`
+- 앱 버전 체크 API:
+  - `GET /app/version?currentVersionCode=<정수>`
+
+## 5) APK 배포
+
+1. 릴리즈 APK 빌드
+2. `server/downloads/echo-calendar-latest.apk`에 복사
+3. 외부 env 파일에서 아래 값을 맞춤
    - `APP_DOWNLOADS_DIR=downloads`
    - `APP_APK_FILENAME=echo-calendar-latest.apk`
-   - `APP_APK_DOWNLOAD_URL=` (비워두면 서버가 자동 URL 생성)
+   - `APP_APK_DOWNLOAD_URL=https://echo-calendar.win/downloads/echo-calendar-latest.apk`
    - `APP_LATEST_VERSION_CODE=<새 버전 코드>`
    - `APP_LATEST_VERSION_NAME=<새 버전 이름>`
    - `APP_MIN_SUPPORTED_VERSION_CODE=<최소 지원 코드>`
-4. `server\RUN_ALL_SERVERS.bat`로 서버를 재시작합니다.
-5. 브라우저에서 APK 링크를 직접 확인합니다.
-   - `https://<도메인>/downloads/echo-calendar-latest.apk`
+4. Docker Compose 재시작
 
-참고:
-- `APP_APK_DOWNLOAD_URL`를 직접 넣으면 그 링크를 우선 사용합니다.
-- 비워두면 서버가 현재 요청 도메인 기준으로 `/downloads/<APP_APK_FILENAME>` URL을 자동 생성합니다.
-- 새 배포 때는 같은 파일명을 덮어쓰기하면 링크를 바꾸지 않아도 됩니다.
+## 6) 확인 주소
 
-## 3-1) 실기기 연결 기준
+- 서버 헬스: `https://echo-calendar.win/health`
+- 사용량 대시보드: `https://echo-calendar.win/usage/dashboard`
+- APK 다운로드: `https://echo-calendar.win/downloads/echo-calendar-latest.apk`
 
-- 같은 Wi-Fi 개발 환경에서는 PC IP 사용:
-  - 예: `http://192.168.0.12:8088`
+## 7) 다른 PC로 옮길 때
 
-## 4) 원격 AI 동작 확인
+1. 새 PC에 Docker Desktop을 설치합니다.
+2. 이 저장소를 새 PC에 복사하거나 다시 클론합니다.
+3. 외부 env 파일도 새 PC로 옮깁니다.
+   - 예: `C:\Users\<사용자명>\Echo_Calendar\SERVER_ENV_TEMPLATE.env`
+4. Cloudflare Tunnel을 계속 쓸 경우 `.cloudflared` 폴더도 새 PC에 준비합니다.
+   - 기존 폴더를 복사하거나
+   - 새 PC에서 `cloudflared tunnel login` 후 다시 설정합니다.
+5. `server/.env`의 경로를 새 PC 기준으로 수정합니다.
 
-앱 로그(`AiAssistantService`)에서 아래를 확인하세요.
+```env
+BACKEND_EXTERNAL_ENV_PATH=C:\Users\<사용자명>\Echo_Calendar\SERVER_ENV_TEMPLATE.env
+CLOUDFLARED_DIR=C:\Users\<사용자명>\.cloudflared
+```
 
-- 원격 성공: `remote_success action=input|search|refine.*`
-- 원격 실패: `remote_failure action=... reason=...`
+6. 아래 BAT 또는 PowerShell 명령으로 실행합니다.
+   - `server/RUN_DOCKER_BACKEND.bat`
+   - 또는 `cd server && docker compose -f docker-compose.yml -f docker-compose.external-env.yml -f docker-compose.tunnel.yml up --build -d`
+7. `https://echo-calendar.win/health` 로 최종 확인합니다.
 
-## 4-1) 휴일 API 동작 확인
+옮길 때 꼭 필요한 것은 3가지입니다.
+- 저장소 파일
+- 외부 env 파일
+- Cloudflare Tunnel 설정 폴더(`.cloudflared`)
 
-- 앱은 backend의 `GET /holidays?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`를 호출합니다.
-- backend는 서버 내부 DB(`HOLIDAY_DB_PATH`)를 조회만 합니다. (런타임 외부 호출 없음)
-- DB 갱신은 `server\SYNC_HOLIDAYS_NOW.bat`으로 별도 수행합니다.
-- 서버 로그에서 아래를 확인하세요.
-  - 조회 실패: `holiday_fetch_failure reason=...`
+## 8) 자주 발생하는 문제
 
-## 4-2) 서버 동기화 정책
-
-- 서버 실행(`RUN_ALL_SERVERS.bat`)은 휴일 동기화를 자동 시작하지 않습니다.
-- 수동 즉시 동기화: `server\SYNC_HOLIDAYS_NOW.bat`
-- 오늘 기준 앞/뒤 5년 갱신: `server\SYNC_HOLIDAYS_WINDOW_5Y.bat`
-
-## 4-3) 사용량 웹 대시보드 접속
-
-- 대시보드는 **앱 화면이 아니라 브라우저 페이지**입니다.
-- 서버 실행 후 브라우저에서 아래 주소로 접속:
-  - 같은 PC: `http://127.0.0.1:8088/usage/dashboard`
-  - 같은 Wi-Fi 다른 기기: `http://<PC_IP>:8088/usage/dashboard`
-- 대시보드 페이지 보호 키를 설정한 경우:
-  - `USAGE_DASHBOARD_ACCESS_KEY=...`
-  - 접속 URL: `http://127.0.0.1:8088/usage/dashboard?key=<설정값>`
-- 상단 로그인은 대시보드/통계 조회 권한이 있는 계정으로 진행:
-  - 권장: `USAGE_ADMIN_USERNAME`, `USAGE_ADMIN_PASSWORD` 설정
-  - 값 변경 후에는 `server\RUN_ALL_SERVERS.bat` 재실행 필요
-- 참고:
-  - 전체 사용자 통계 API(`/usage/overview`, `/usage/user-detail`)는 관리자 권한이 필요합니다.
-  - 일반 사용자는 앱 내 `내 사용량`(`/usage/me`)만 조회합니다.
-
-## 5) 자주 발생하는 문제
-
-- `Env file not found`:
-  - `server\SERVER_ENV_PATH.txt`의 경로가 실제 파일 위치와 같은지 확인
-  - `server\SERVER_ENV_TEMPLATE.env`를 복제(복사-붙여넣기)해 해당 경로에 배치
-- `OPENAI_API_KEY` 비어 있음:
-  - `server\SERVER_ENV_PATH.txt`에 적힌 키 파일을 수정 후 재실행
-- 키 파일 경로를 바꾸고 싶음:
-  - `server\SERVER_ENV_PATH.txt`에서 `OPENAI_API_KEY_FILE_PATH=원하는경로`로 변경
-- `Backend is not reachable`:
-  - 서버 미실행 또는 포트 충돌
-  - 빠른 확인: `server\RUN_ALL_SERVERS.bat` 실행
-  - 서버 창이 떠 있고 `8088` 포트가 열렸는지 확인
-## 6) 원격 AI 개념 (참고)
-
-앱의 AI 해석은 원격 AI(backend 경유)만 사용합니다.
-
-- 원격 AI:
-  - 앱 -> `backend` 서버 -> OpenAI API -> 앱 순서로 응답
-  - 입력/검색/필드보완 정확도를 높이는 실제 LLM 경로
-  - 키 미설정/업스트림 실패 시 오류를 반환합니다. (로컬 fallback 비활성)
+- `Env file not found`
+  - `server/.env`의 `BACKEND_EXTERNAL_ENV_PATH`가 실제 파일을 가리키는지 확인
+- `cloudflared`가 backend에 연결하지 못함
+  - `.cloudflared/config.yml`의 서비스 주소가 `http://backend:8088`인지 확인
+- `OPENAI_API_KEY` 비어 있음
+  - 외부 env 파일을 열어 키를 입력하고 Compose를 재시작
+- `https://echo-calendar.win/health` 접속 실패
+  - Docker Compose가 떠 있는지 확인
+  - Cloudflare Tunnel 설정과 DNS 연결 상태 확인
+  - Docker Desktop 또는 Windows PowerShell에서 실행했는지 확인

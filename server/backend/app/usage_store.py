@@ -16,8 +16,10 @@ def _ensure_parent(db_path: Path) -> None:
 @contextmanager
 def _connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     _ensure_parent(db_path)
-    connection = sqlite3.connect(str(db_path))
+    connection = sqlite3.connect(str(db_path), timeout=30)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA busy_timeout = 30000")
     try:
         yield connection
         connection.commit()

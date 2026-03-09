@@ -19,6 +19,7 @@ local.properties
 .env.*
 *.env
 !server/SERVER_ENV_TEMPLATE.env
+!server/docker.defaults.env
 !app/APP_SIGNING_TEMPLATE.env
 
 # Local tooling artifacts

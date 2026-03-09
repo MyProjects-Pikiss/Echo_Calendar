@@ -1,0 +1,62 @@
+services:
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: echo-calendar-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_KRAFT_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: echo-calendar-backend
+    depends_on:
+      - kafka
+    env_file:
+      - ./docker.defaults.env
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./backend/data:/app/data
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  usage-consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: echo-calendar-usage-consumer
+    depends_on:
+      - kafka
+    command:
+      - python
+      - scripts/consume_usage_events.py
+    env_file:
+      - ./docker.defaults.env
+    volumes:
+      - ./backend/data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  kafka_data:

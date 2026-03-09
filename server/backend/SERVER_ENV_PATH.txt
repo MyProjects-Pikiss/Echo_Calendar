@@ -1,4 +1,0 @@
-# Echo Calendar AI launcher config
-# Format: KEY=VALUE
-# This file points to your local env file where OPENAI_API_KEY is stored.
-OPENAI_API_KEY_FILE_PATH=%USERPROFILE%\Echo_Calendar\SERVER_ENV_TEMPLATE.env

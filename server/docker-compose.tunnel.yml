@@ -1,0 +1,14 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: echo-calendar-cloudflared
+    depends_on:
+      - backend
+    command:
+      - tunnel
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+    volumes:
+      - ${CLOUDFLARED_DIR:?set CLOUDFLARED_DIR in server/.env}:/etc/cloudflared:ro
+    restart: unless-stopped

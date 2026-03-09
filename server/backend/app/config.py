@@ -41,42 +41,15 @@ def _parse_env_file(env_file: Path, original_env_keys: set[str]) -> None:
         os.environ[key] = value
 
 
-def _extract_env_file_path_from_path_config(path_config_file: Path) -> Path | None:
-    if not path_config_file.exists():
-        return None
-    for raw_line in path_config_file.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-            if key in {"OPENAI_API_KEY_FILE_PATH", "API_KEY_FILE_PATH", "OPENAI_ENV_FILE"} and value:
-                return Path(_expand_env_path(value)).expanduser()
-            continue
-        return Path(_expand_env_path(line)).expanduser()
-    return None
-
-
 def _load_local_env_files() -> None:
-    """Load env files with SERVER_ENV_PATH.txt as the primary source of truth."""
+    """Load optional env files for the Docker-based server runtime."""
     original_env_keys = set(os.environ.keys())
 
     env_files: list[Path] = []
 
-    path_config = Path(__file__).resolve().parents[2] / "SERVER_ENV_PATH.txt"
-    from_path_config = _extract_env_file_path_from_path_config(path_config)
-    if from_path_config is not None:
-        env_files.append(from_path_config)
-
     external_env = os.getenv("OPENAI_ENV_FILE", "").strip()
     if external_env:
         env_files.append(Path(_expand_env_path(external_env)).expanduser())
-
-    env_files.append(Path.home() / ".echo_calendar_ai.env")
-    env_files.append(Path.home() / "Echo_Calendar" / "SERVER_ENV_TEMPLATE.env")
-    env_files.append(Path.home() / "SERVER_ENV_TEMPLATE.env")
 
     seen: set[str] = set()
     for env_file in env_files:
@@ -125,6 +98,16 @@ class Settings:
     usage_dashboard_access_key: str = os.getenv("USAGE_DASHBOARD_ACCESS_KEY", "").strip()
     usage_admin_username: str = os.getenv("USAGE_ADMIN_USERNAME", "").strip()
     usage_admin_password: str = os.getenv("USAGE_ADMIN_PASSWORD", "").strip()
+    kafka_enabled: bool = os.getenv("KAFKA_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    kafka_bootstrap_servers: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092").strip()
+    kafka_usage_topic: str = os.getenv("KAFKA_USAGE_TOPIC", "usage-events").strip()
+    kafka_usage_group_id: str = os.getenv("KAFKA_USAGE_GROUP_ID", "echo-calendar-usage-consumer").strip()
+    kafka_client_id: str = os.getenv("KAFKA_CLIENT_ID", "echo-calendar-backend").strip()
     holiday_sync_enabled: bool = os.getenv("HOLIDAY_SYNC_ENABLED", "true").lower() in {
         "1",
         "true",

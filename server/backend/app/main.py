@@ -28,6 +28,7 @@ from .interpreters import (
     local_refine_field,
     local_search_interpret,
 )
+from .kafka_usage import KafkaUsageProducer
 from .holiday_store import init_holiday_db
 from .holiday_sync import ensure_range_loaded
 from .llm_client import LlmClientError, LlmUsage, OpenAILlmClient
@@ -54,7 +55,6 @@ from .usage_store import (
     get_user_by_session,
     init_usage_db,
     list_users,
-    log_usage_event,
     usage_overview,
     usage_user_detail,
 )
@@ -74,7 +74,7 @@ if not downloads_dir.is_absolute():
 downloads_dir.mkdir(parents=True, exist_ok=True)
 dashboard_html_path = Path(__file__).resolve().parent / "templates" / "usage_dashboard.html"
 _usage_event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(maxsize=5000)
-_usage_worker_task: asyncio.Task[None] | None = None
+usage_kafka_producer = KafkaUsageProducer()
 app.mount("/downloads", StaticFiles(directory=str(downloads_dir), check_dir=False), name="downloads")
 
 
@@ -264,6 +264,8 @@ def _record_ai_usage(
         "error_code": error_code,
         "error_message": error_message,
     }
+    if usage_kafka_producer.publish(event):
+        return
     try:
         _usage_event_queue.put_nowait(event)
     except asyncio.QueueFull:
@@ -295,6 +297,8 @@ async def _usage_worker() -> None:
         try:
             if event is None:
                 break
+            from .usage_store import log_usage_event
+
             log_usage_event(usage_db_path, **event)
         except Exception as exc:  # noqa: BLE001
             logger.warning("usage_log_failure reason=%s", str(exc))
@@ -304,7 +308,6 @@ async def _usage_worker() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    global _usage_worker_task
     init_holiday_db(holiday_db_path)
     init_usage_db(usage_db_path)
     if settings.usage_admin_username and settings.usage_admin_password:
@@ -313,20 +316,22 @@ async def on_startup() -> None:
             username=settings.usage_admin_username,
             password=settings.usage_admin_password,
         )
-    _usage_worker_task = asyncio.create_task(_usage_worker())
+    if not usage_kafka_producer.enabled:
+        app.state.usage_worker_task = asyncio.create_task(_usage_worker())
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    global _usage_worker_task
-    if _usage_worker_task is None:
+    usage_kafka_producer.close()
+    usage_worker_task: asyncio.Task[None] | None = getattr(app.state, "usage_worker_task", None)
+    if usage_worker_task is None:
         return
     try:
         _usage_event_queue.put_nowait(None)
     except asyncio.QueueFull:
         logger.warning("usage_queue_full shutdown_drain_skipped")
-    await _usage_worker_task
-    _usage_worker_task = None
+    await usage_worker_task
+    app.state.usage_worker_task = None
 
 
 @app.get("/health")
