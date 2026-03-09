@@ -6,6 +6,7 @@ import com.echo.echocalendar.alarm.EventAlarmScheduler
 import com.echo.echocalendar.data.local.EventAlarmDao
 import com.echo.echocalendar.data.local.EventRawInputDao
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
+import com.echo.echocalendar.domain.usecase.GetAllEventsUseCase
 import com.echo.echocalendar.domain.usecase.GetEventByIdUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
@@ -30,6 +31,7 @@ class CalendarViewModelFactory(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventByIdUseCase: GetEventByIdUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
+    private val getAllEventsUseCase: GetAllEventsUseCase,
     private val getLabelsForEventUseCase: GetLabelsForEventUseCase,
     private val saveEventUseCase: SaveEventUseCase,
     private val deleteEventUseCase: DeleteEventUseCase,
@@ -45,6 +47,7 @@ class CalendarViewModelFactory(
                 getEventsByDateUseCase,
                 getEventByIdUseCase,
                 getEventsByMonthUseCase,
+                getAllEventsUseCase,
                 getLabelsForEventUseCase,
                 saveEventUseCase,
                 deleteEventUseCase,

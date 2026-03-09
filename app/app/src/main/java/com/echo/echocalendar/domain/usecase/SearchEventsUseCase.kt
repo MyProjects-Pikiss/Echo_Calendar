@@ -96,7 +96,8 @@ private fun buildSafeFtsQuery(query: String): String {
     val tokens = Regex("""[\p{L}\p{N}_]+""")
         .findAll(query)
         .map { it.value }
-        .filter { it.isNotBlank() }
+        .map { it.trim().lowercase(Locale.ROOT) }
+        .filter { it.isNotBlank() && it !in SEARCH_STOPWORDS }
         .distinct()
         .toList()
     return when {
@@ -105,6 +106,11 @@ private fun buildSafeFtsQuery(query: String): String {
         else -> tokens.joinToString(" OR ") { "$it*" }
     }
 }
+
+private val SEARCH_STOPWORDS = setOf(
+    "관련", "관련된", "관련된거", "관련된것", "거", "것",
+    "일정", "기록", "이벤트", "찾아", "찾아줘", "보여줘"
+)
 
 private fun String?.toLocalDateOrNull(): LocalDate? {
     if (this.isNullOrBlank()) return null

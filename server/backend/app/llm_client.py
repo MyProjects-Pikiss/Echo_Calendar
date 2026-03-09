@@ -80,13 +80,24 @@ class OpenAILlmClient:
                         )
                         await asyncio.sleep(0.25)
                     except Exception as exc:  # noqa: BLE001
-                        last_error = exc
+                        last_error = LlmClientError(_format_exception_message(exc))
                         await asyncio.sleep(0.25)
         except TimeoutError as exc:
             raise LlmClientError(
                 f"LLM call exceeded deadline ({settings.llm_deadline_seconds}s)"
             ) from exc
-        raise LlmClientError(str(last_error) if last_error else "LLM call failed")
+        if last_error is None:
+            raise LlmClientError("LLM call failed")
+        if isinstance(last_error, LlmClientError):
+            raise last_error
+        raise LlmClientError(_format_exception_message(last_error))
+
+
+def _format_exception_message(exc: Exception) -> str:
+    detail = str(exc).strip()
+    if not detail:
+        detail = repr(exc)
+    return f"{exc.__class__.__name__}: {detail}"
 
 
 def _extract_usage(raw_usage: object) -> LlmUsage | None:

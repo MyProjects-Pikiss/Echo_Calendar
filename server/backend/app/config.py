@@ -105,6 +105,12 @@ class Settings:
     llm_deadline_seconds: float = float(os.getenv("LLM_DEADLINE_SECONDS", "15"))
     llm_max_output_tokens: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "256"))
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+    block_probe_requests: bool = os.getenv("BLOCK_PROBE_REQUESTS", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     enable_local_fallback: bool = False
     holiday_api_key: str = os.getenv("KOREA_HOLIDAY_API_KEY", "").strip()
     holiday_api_base_url: str = os.getenv(

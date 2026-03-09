@@ -102,6 +102,33 @@ def _is_path_enabled(path: str) -> bool:
     return True
 
 
+_PROBE_EXACT_PATHS = {
+    "/xmlrpc.php",
+    "/wlwmanifest.xml",
+}
+_PROBE_PATH_FRAGMENTS = (
+    "/wp-includes/wlwmanifest.xml",
+    "/wordpress/",
+    "/wp/",
+)
+
+
+def _is_probe_path(path: str) -> bool:
+    lower = path.strip().lower()
+    if lower in _PROBE_EXACT_PATHS:
+        return True
+    return any(fragment in lower for fragment in _PROBE_PATH_FRAGMENTS)
+
+
+@app.middleware("http")
+async def _probe_block_middleware(request: Request, call_next):
+    path = request.url.path
+    if settings.block_probe_requests and request.method in {"GET", "HEAD", "OPTIONS"} and _is_probe_path(path):
+        logger.info("probe_blocked ip=%s method=%s path=%s", _get_client_key(request), request.method, path)
+        return Response(status_code=404)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _mode_gate_middleware(request: Request, call_next):
     if _is_path_enabled(request.url.path):

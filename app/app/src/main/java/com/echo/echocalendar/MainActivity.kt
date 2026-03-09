@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
                         container.getEventsByDateUseCase,
                         container.getEventByIdUseCase,
                         container.getEventsByMonthUseCase,
+                        container.getAllEventsUseCase,
                         container.getLabelsForEventUseCase,
                         container.saveEventUseCase,
                         container.deleteEventUseCase,

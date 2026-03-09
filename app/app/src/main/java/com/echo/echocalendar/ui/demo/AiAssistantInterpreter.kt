@@ -150,11 +150,52 @@ object AiAssistantInterpreter {
     }
 
     private fun extractCategoryId(source: String): String {
-        val category = CategoryDefaults.categories.firstOrNull { category ->
+        val explicit = CategoryDefaults.categories.firstOrNull { category ->
             source.contains(category.displayName, ignoreCase = true) ||
                 source.contains(category.id, ignoreCase = true)
         }
-        return category?.id ?: "other"
+        if (explicit != null) return explicit.id
+        val normalized = source.lowercase()
+        val scores = mutableMapOf<String, Int>()
+        fun score(categoryId: String, keyword: String, weight: Int) {
+            if (normalized.contains(keyword.lowercase())) {
+                scores[categoryId] = (scores[categoryId] ?: 0) + weight
+            }
+        }
+        score("delivery", "택배", 4)
+        score("delivery", "배송", 4)
+        score("delivery", "배달", 2)
+        score("delivery", "도착", 3)
+        score("spending", "이마트", 5)
+        score("spending", "마트", 4)
+        score("spending", "장보기", 4)
+        score("spending", "쇼핑", 4)
+        score("spending", "구매", 3)
+        score("spending", "결제", 3)
+        score("spending", "지출", 3)
+        score("spending", "방문", 1)
+        score("work", "업무", 4)
+        score("work", "회의", 4)
+        score("work", "미팅", 3)
+        score("dining", "식사", 4)
+        score("dining", "점심", 3)
+        score("dining", "저녁", 3)
+        score("dining", "카페", 2)
+        score("medical", "병원", 4)
+        score("medical", "진료", 4)
+        if (normalized.contains("배달일") || normalized.contains("배달 일")) {
+            scores["delivery"] = (scores["delivery"] ?: 0) - 3
+        }
+        if (listOf("끝나고", "끝난", "후", "다음").any { normalized.contains(it) } && (scores["spending"] ?: 0) > 0) {
+            scores["delivery"] = (scores["delivery"] ?: 0) - 2
+        }
+        val ranked = scores
+            .mapValues { (_, value) -> maxOf(0, value) }
+            .toList()
+            .sortedByDescending { (_, value) -> value }
+        val best = ranked.firstOrNull() ?: return "other"
+        val second = ranked.getOrNull(1)?.second ?: 0
+        return if (best.second >= 3 && best.second - second >= 1) best.first else "other"
     }
 
     private fun extractPlaceText(source: String): String? {

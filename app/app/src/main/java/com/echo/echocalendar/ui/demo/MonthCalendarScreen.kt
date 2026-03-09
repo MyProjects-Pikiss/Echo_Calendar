@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -149,9 +150,9 @@ fun MonthCalendarScreen(
     var isProfileOpen by remember { mutableStateOf(false) }
     var isAiSearchResultOpen by remember { mutableStateOf(false) }
     var isEventListPanelOpen by remember { mutableStateOf(false) }
+    var eventListScope by remember { mutableStateOf("month") }
     var eventListSortOrder by remember { mutableStateOf("desc") }
     var eventListCategoryFilter by remember { mutableStateOf("all") }
-    var isEventListCategoryMenuOpen by remember { mutableStateOf(false) }
     var aiSearchSuggestion by remember { mutableStateOf<AiSearchSuggestion?>(null) }
     var pendingAiAction by remember { mutableStateOf<AiAction?>(null) }
     var aiErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -422,9 +423,9 @@ fun MonthCalendarScreen(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguageTag)
             putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 5000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 7000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 8000L)
         }
         speechRecognizer?.startListening(speechIntent)
         isListening = true
@@ -587,7 +588,7 @@ fun MonthCalendarScreen(
         val sectionGap = (maxHeight * 0.01f).coerceIn(4.dp, 10.dp)
         val calendarInnerGap = (maxHeight * 0.008f).coerceIn(2.dp, 8.dp)
         val eventListMaxHeight = (maxHeight * 0.2f).coerceIn(110.dp, 220.dp)
-        val swipePanelWidth = (maxWidth * 0.86f).coerceIn(260.dp, 420.dp)
+        val swipePanelWidth = (maxWidth * 0.82f).coerceIn(250.dp, 380.dp)
         val detailVerticalGap = (maxHeight * 0.01f).coerceIn(6.dp, 12.dp)
         val eventItemGap = (maxHeight * 0.008f).coerceIn(4.dp, 8.dp)
         val eventCardHorizontalPadding = (maxWidth * 0.014f).coerceIn(10.dp, 16.dp)
@@ -613,11 +614,18 @@ fun MonthCalendarScreen(
                 .distinctBy { it.id }
                 .toList()
         }
-        val filteredMonthEvents = remember(monthEvents, eventListCategoryFilter, eventListSortOrder) {
-            val base = if (eventListCategoryFilter == "all") {
-                monthEvents
+        val listSourceEvents = remember(eventListScope, monthEvents, calendarViewModel.allEvents) {
+            if (eventListScope == "all") {
+                calendarViewModel.allEvents
             } else {
-                monthEvents.filter { it.categoryId == eventListCategoryFilter }
+                monthEvents
+            }
+        }
+        val filteredListEvents = remember(listSourceEvents, eventListCategoryFilter, eventListSortOrder) {
+            val base = if (eventListCategoryFilter == "all") {
+                listSourceEvents
+            } else {
+                listSourceEvents.filter { it.categoryId == eventListCategoryFilter }
             }
             when (eventListSortOrder) {
                 "asc" -> base.sortedWith(compareBy<com.echo.echocalendar.data.local.EventEntity> { it.occurredAt }.thenBy { it.updatedAt })
@@ -1018,17 +1026,24 @@ fun MonthCalendarScreen(
             }
         }
 
-        if (!isWideScreen) {
-            Box(
+        AnimatedVisibility(
+            visible = !isWideScreen && !isEventListPanelOpen,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .statusBarsPadding()
+                .padding(bottom = bottomBarHeight + 8.dp),
+            enter = fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(120))
+        ) {
+            Surface(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
                     .width(20.dp)
+                    .height(104.dp)
                     .pointerInput(Unit) {
                         var dragDistance = 0f
                         detectHorizontalDragGestures(
                             onDragEnd = {
-                                if (dragDistance < -70f) {
+                                if (dragDistance < -40f) {
                                     isEventListPanelOpen = true
                                 }
                                 dragDistance = 0f
@@ -1038,17 +1053,27 @@ fun MonthCalendarScreen(
                             }
                         )
                     }
-            )
+                    .clickable { isEventListPanelOpen = true },
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 3.dp
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "◀", style = MaterialTheme.typography.titleMedium)
+                }
+            }
         }
 
         AnimatedVisibility(
             visible = !isWideScreen && isEventListPanelOpen,
             modifier = Modifier
-                .align(Alignment.CenterEnd)
+                .align(Alignment.TopEnd)
                 .fillMaxHeight()
                 .width(swipePanelWidth)
-                .navigationBarsPadding()
-                .padding(bottom = bottomBarHeight + 8.dp),
+                .statusBarsPadding(),
             enter = slideInHorizontally(
                 animationSpec = tween(220),
                 initialOffsetX = { it }
@@ -1090,13 +1115,32 @@ fun MonthCalendarScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${monthFormatter.format(shownMonth.atDay(1))} 이벤트",
+                            text = if (eventListScope == "all") {
+                                "전체 이벤트"
+                            } else {
+                                "${monthFormatter.format(shownMonth.atDay(1))} 이벤트"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = { isEventListPanelOpen = false }) {
                             Text("닫기")
                         }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = eventListScope == "month",
+                            onClick = { eventListScope = "month" },
+                            label = { Text("현재 달") }
+                        )
+                        FilterChip(
+                            selected = eventListScope == "all",
+                            onClick = { eventListScope = "all" },
+                            label = { Text("전체") }
+                        )
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1129,33 +1173,28 @@ fun MonthCalendarScreen(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = { isEventListCategoryMenuOpen = true }) {
-                            Text("선택")
-                        }
-                        DropdownMenu(
-                            expanded = isEventListCategoryMenuOpen,
-                            onDismissRequest = { isEventListCategoryMenuOpen = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("전체") },
-                                onClick = {
-                                    eventListCategoryFilter = "all"
-                                    isEventListCategoryMenuOpen = false
-                                }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = eventListCategoryFilter == "all",
+                            onClick = { eventListCategoryFilter = "all" },
+                            label = { Text("전체") }
+                        )
+                        CategoryDefaults.categories.forEach { category ->
+                            FilterChip(
+                                selected = eventListCategoryFilter == category.id,
+                                onClick = { eventListCategoryFilter = category.id },
+                                label = { Text(category.displayName) }
                             )
-                            CategoryDefaults.categories.forEach { category ->
-                                DropdownMenuItem(
-                                    text = { Text(category.displayName) },
-                                    onClick = {
-                                        eventListCategoryFilter = category.id
-                                        isEventListCategoryMenuOpen = false
-                                    }
-                                )
-                            }
                         }
                     }
                     HorizontalDivider()
-                    if (filteredMonthEvents.isEmpty()) {
+                    if (filteredListEvents.isEmpty()) {
                         Text(
                             text = "조건에 맞는 이벤트가 없습니다.",
                             style = MaterialTheme.typography.bodySmall,
@@ -1168,7 +1207,7 @@ fun MonthCalendarScreen(
                                 .weight(1f),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            items(filteredMonthEvents) { event ->
+                            items(filteredListEvents) { event ->
                                 val eventDateTime = Instant.ofEpochMilli(event.occurredAt)
                                     .atZone(zoneId)
                                     .toLocalDateTime()
@@ -2841,6 +2880,8 @@ private fun AiSearchResultContent(
 
 private fun buildAiSearchSummary(suggestion: AiSearchSuggestion): String {
     val conditions = mutableListOf<String>()
+    conditions += "전략: ${searchStrategyLabel(suggestion.strategy)}"
+    conditions += "정렬: ${if (suggestion.sortOrder == "asc") "오래된순" else "최신순"}"
     suggestion.query.takeIf { it.isNotBlank() }?.let { conditions += "검색어: $it" }
     suggestion.dateFrom?.takeIf { it.isNotBlank() }?.let { conditions += "시작일: $it" }
     suggestion.dateTo?.takeIf { it.isNotBlank() }?.let { conditions += "종료일: $it" }
@@ -2852,6 +2893,15 @@ private fun buildAiSearchSummary(suggestion: AiSearchSuggestion): String {
     }
     if (conditions.isEmpty()) return "해석된 조건이 없어 기본 검색 결과를 표시합니다."
     return "해석 조건 - ${conditions.joinToString(" / ")}"
+}
+
+private fun searchStrategyLabel(strategy: AiSearchStrategy): String = when (strategy) {
+    AiSearchStrategy.AllEvents -> "전체조회"
+    AiSearchStrategy.DateRange -> "기간검색"
+    AiSearchStrategy.Category -> "카테고리검색"
+    AiSearchStrategy.Label -> "라벨검색"
+    AiSearchStrategy.Keyword -> "키워드검색"
+    AiSearchStrategy.Combined -> "복합검색"
 }
 
 @Composable

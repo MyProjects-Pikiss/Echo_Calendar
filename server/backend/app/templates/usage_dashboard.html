@@ -145,9 +145,9 @@
     th, td {
       text-align: left;
       border-bottom: 1px solid var(--line);
-      padding: 10px 12px;
+      padding: 7px 8px;
       vertical-align: top;
-      font-size: 13px;
+      font-size: 12px;
     }
     th {
       background: #f8fbff;
@@ -366,18 +366,18 @@
       <div class="table-wrap" style="margin-top: 10px;">
         <table id="eventsTable" class="events-table">
           <colgroup>
-            <col style="width: 170px;" />
-            <col style="width: 120px;" />
+            <col style="width: 150px;" />
+            <col style="width: 100px;" />
+            <col style="width: 130px;" />
+            <col style="width: 52px;" />
+            <col style="width: 82px;" />
+            <col style="width: 82px;" />
+            <col style="width: 82px;" />
+            <col style="width: 82px;" />
             <col style="width: 160px;" />
-            <col style="width: 60px;" />
-            <col style="width: 90px;" />
-            <col style="width: 90px;" />
-            <col style="width: 90px;" />
-            <col style="width: 90px;" />
-            <col style="width: 180px;" />
-            <col style="width: 180px;" />
-            <col style="width: 300px;" />
-            <col style="width: 220px;" />
+            <col style="width: 160px;" />
+            <col style="width: 260px;" />
+            <col style="width: 190px;" />
           </colgroup>
           <thead>
             <tr>
@@ -630,8 +630,24 @@
 
     function toDisplayText(value) {
       if (value === null || value === undefined) return "-";
-      if (typeof value === "string") return value;
-      return JSON.stringify(value, null, 2);
+      if (typeof value === "string") return value.trim();
+      return JSON.stringify(value, null, 2).trim();
+    }
+
+    function buildObjectBlocks(entries) {
+      if (!entries.length) {
+        return `
+          <div class="llm-block">
+            <pre class="llm-text">표시할 항목이 없습니다.</pre>
+          </div>
+        `;
+      }
+      return entries.map(([k, v]) => `
+        <div class="llm-block">
+          <span class="llm-key">${esc(k)}</span>
+          <pre class="llm-text">${esc(toDisplayText(v))}</pre>
+        </div>
+      `).join("");
     }
 
     function buildLlmCellHtml(raw, kind = "input") {
@@ -666,8 +682,8 @@
       const systemEntry = entries.find(([k]) => k.toLowerCase() === "system");
 
       if (kind === "output") {
-        const compactObj = Object.fromEntries(nonSystemEntries);
-        const outputText = nonSystemEntries.length ? toDisplayText(compactObj) : text;
+        const compactObj = Object.fromEntries(nonSystemEntries.length ? nonSystemEntries : entries);
+        const outputText = toDisplayText(compactObj);
         return `
           <details class="llm-details">
             <summary>열기 · 출력</summary>
@@ -682,18 +698,7 @@
 
       const summaryKeys = nonSystemEntries.map(([k]) => k).join(", ");
       const summaryLabel = summaryKeys ? `열기 · ${summaryKeys}` : "열기";
-      const nonSystemBlocks = nonSystemEntries.length
-        ? nonSystemEntries.map(([k, v]) => `
-          <div class="llm-block">
-            <span class="llm-key">${esc(k)}</span>
-            <pre class="llm-text">${esc(toDisplayText(v))}</pre>
-          </div>
-        `).join("")
-        : `
-          <div class="llm-block">
-            <pre class="llm-text">표시할 항목이 없습니다.</pre>
-          </div>
-        `;
+      const nonSystemBlocks = buildObjectBlocks(nonSystemEntries);
       const systemBlock = systemEntry
         ? `
           <details class="llm-system-details">
@@ -723,7 +728,7 @@
       const cols = table.querySelectorAll("colgroup col");
       if (!cols || cols.length < 10) return;
       const hasOpen = byId("eventsBody").querySelector(".llm-details[open]") !== null;
-      const width = hasOpen ? 320 : 180;
+      const width = hasOpen ? 260 : 150;
       cols[8].style.width = `${width}px`;
       cols[9].style.width = `${width}px`;
     }

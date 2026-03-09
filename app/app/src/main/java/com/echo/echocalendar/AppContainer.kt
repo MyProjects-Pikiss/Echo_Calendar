@@ -11,6 +11,7 @@ import com.echo.echocalendar.data.local.MIGRATION_6_7
 import com.echo.echocalendar.data.local.MIGRATION_7_8
 import com.echo.echocalendar.data.local.MIGRATION_8_9
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
+import com.echo.echocalendar.domain.usecase.GetAllEventsUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventByIdUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
@@ -46,6 +47,7 @@ class AppContainer(context: Context) {
     val getEventsByDateUseCase: GetEventsByDateUseCase = GetEventsByDateUseCase(database)
     val getEventByIdUseCase: GetEventByIdUseCase = GetEventByIdUseCase(database)
     val getEventsByMonthUseCase: GetEventsByMonthUseCase = GetEventsByMonthUseCase(database)
+    val getAllEventsUseCase: GetAllEventsUseCase = GetAllEventsUseCase(database)
 
     val aiApiGateway: AiApiGateway = HttpAiApiGateway(
         usageAccessTokenProvider = {

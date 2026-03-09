@@ -12,6 +12,7 @@ import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.data.local.EventRawInputDao
 import com.echo.echocalendar.data.local.EventRawInputEntity
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
+import com.echo.echocalendar.domain.usecase.GetAllEventsUseCase
 import com.echo.echocalendar.domain.usecase.GetEventByIdUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByMonthUseCase
@@ -29,6 +30,7 @@ class CalendarViewModel(
     private val getEventsByDateUseCase: GetEventsByDateUseCase,
     private val getEventByIdUseCase: GetEventByIdUseCase,
     private val getEventsByMonthUseCase: GetEventsByMonthUseCase,
+    private val getAllEventsUseCase: GetAllEventsUseCase,
     private val getLabelsForEventUseCase: GetLabelsForEventUseCase,
     private val saveEventUseCase: SaveEventUseCase,
     private val deleteEventUseCase: DeleteEventUseCase,
@@ -45,6 +47,8 @@ class CalendarViewModel(
         private set
     var eventsByDate by mutableStateOf<Map<LocalDate, List<EventEntity>>>(emptyMap())
         private set
+    var allEvents by mutableStateOf<List<EventEntity>>(emptyList())
+        private set
     var labelsByEventId by mutableStateOf<Map<String, List<String>>>(emptyMap())
         private set
     var alarmEnabledByEventId by mutableStateOf<Map<String, Boolean>>(emptyMap())
@@ -57,6 +61,7 @@ class CalendarViewModel(
     init {
         loadEvents(selectedDate)
         loadEventsForMonth(YearMonth.from(selectedDate))
+        loadAllEvents()
     }
 
     fun onDateSelected(date: LocalDate) {
@@ -113,6 +118,7 @@ class CalendarViewModel(
             syncEventAlarm(eventId = eventId, occurredAt = occurredAt, summary = summary, enabled = alarmEnabled)
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
+            loadAllEvents()
         }
     }
 
@@ -127,6 +133,7 @@ class CalendarViewModel(
             val date = Instant.ofEpochMilli(event.occurredAt).atZone(zoneId).toLocalDate()
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
+            loadAllEvents()
         }
     }
 
@@ -168,6 +175,13 @@ class CalendarViewModel(
             labelsByEventId = labelsByEventId + (eventId to labels)
             loadEvents(date)
             loadEventsForMonth(YearMonth.from(date))
+            loadAllEvents()
+        }
+    }
+
+    private fun loadAllEvents() {
+        viewModelScope.launch {
+            allEvents = getAllEventsUseCase()
         }
     }
 
