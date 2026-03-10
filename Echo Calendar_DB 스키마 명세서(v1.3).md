@@ -1,4 +1,4 @@
-Echo Calendar — DB 스키마 명세서 (v1.2)
+Echo Calendar — DB 스키마 명세서 (v1.3)
 (컬럼/제약/인덱스 중심, status 제거 버전)
 
 ==================================================
@@ -35,6 +35,7 @@ TABLE: Event
 - id            TEXT    PRIMARY KEY
 - categoryId    TEXT    NOT NULL            -- FK -> Category.id
 - occurredAt    INTEGER NOT NULL            -- epoch millis
+- isYearlyRecurring INTEGER NOT NULL        -- 0/1, 연간 반복 여부
 - summary       TEXT    NOT NULL
 - placeText     TEXT    NULL
 - body          TEXT    NOT NULL            -- 원문/STT/메모 (필수)
@@ -83,9 +84,9 @@ TABLE: EventFts (FTS4)
 
 NOTES:
 - Event의 summary/body/placeText 텍스트 검색 후보 추출 용도
-- Event와의 동기화는 다음 중 하나로 구현:
-  (A) External content(권장) 또는
-  (B) 수동 동기화(Insert/Update/Delete 시 FTS 갱신)
+- FTS4 + `unicode61` tokenizer 사용
+- eventId는 원본 Event와의 매핑용 필드
+- 앱 로직에서 Event 저장/수정/삭제 시 FTS 데이터도 함께 갱신되는 구조를 전제
 
 ==================================================
 6) EventAlarm
@@ -96,3 +97,28 @@ TABLE: EventAlarm
 - eventId       TEXT    NOT NULL            -- FK -> Event.id
 - triggerAt     INTEGER NOT NULL            -- epoch millis
 - isEnabled     INTEGER NOT NULL            -- 0/1
+
+INDEXES:
+- INDEX(eventId)
+
+FK RULES:
+- eventId -> Event.id
+- ON UPDATE CASCADE
+- ON DELETE CASCADE
+
+==================================================
+7) EventRawInput
+==================================================
+
+TABLE: EventRawInput
+- eventId       TEXT    PRIMARY KEY         -- FK -> Event.id
+- rawText       TEXT    NOT NULL            -- 사용자의 원문 입력/음성 인식 결과
+- updatedAt     INTEGER NOT NULL            -- epoch millis
+
+INDEXES:
+- UNIQUE INDEX(eventId)
+
+FK RULES:
+- eventId -> Event.id
+- ON UPDATE CASCADE
+- ON DELETE CASCADE

@@ -1,8 +1,8 @@
-# Echo Calendar 통합 명세서 (v1.5)
+# Echo Calendar 통합 명세서 (v1.6)
 
-작성일: 2026-02-27  
+작성일: 2026-03-10  
 문서 정책: 본 문서가 제품/기능/API/운영/검증의 단일 기준 문서(Single Source)다.  
-DB 테이블/인덱스/제약은 별도 문서 `Echo Calendar_DB 스키마 명세서(v1.2).md`를 기준으로 한다.
+DB 테이블/인덱스/제약은 별도 문서 `Echo Calendar_DB 스키마 명세서(v1.3).md`를 기준으로 한다.
 
 ---
 
@@ -13,6 +13,7 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 - 오프라인 우선(offline-first)
 - 온라인 AI는 보조 기능(online-optional)
 - 데이터 변경은 항상 사용자 확인 기반
+- 서버는 AI 해석 외에도 인증, 사용량 조회, 공휴일 동기화, 앱 버전 체크를 담당
 
 ---
 
@@ -34,8 +35,8 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 
 ### 2.3 실패/복구 원칙
 
-- 원격 AI 실패 시 로컬 규칙 fallback 수행
-- 기존 로컬 데이터 무결성에 영향 없음
+- 원격 기능 실패 시 기존 로컬 데이터 무결성에 영향 없음
+- AI/인증/공휴일/버전 체크 등 서버 의존 기능은 서버 상태와 네트워크 상태에 영향을 받음
 
 ---
 
@@ -47,6 +48,7 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 - 날짜별 이벤트 목록
 - 텍스트 입력 및 수정/삭제
 - 카테고리 기반 분류
+- 연간 반복 일정 지원
 
 ### 3.2 검색
 
@@ -58,6 +60,21 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 
 - 이벤트 기반 알림(EventAlarm)
 - 로컬 스케줄링 처리
+
+### 3.4 인증/사용량
+
+- 앱 로그인/회원가입
+- 사용자별 사용량 조회
+
+### 3.5 공휴일 동기화
+
+- 서버 `/holidays` API 기반 공휴일/기념일 조회
+- 앱 로컬 캐시 사용
+
+### 3.6 앱 업데이트 확인
+
+- 서버 `/app/version` 기준 최신 버전 확인
+- 필요 시 강제 업데이트 가능
 
 ---
 
@@ -71,7 +88,7 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 
 ## 5) 데이터 모델 규칙(운영)
 
-DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.2).md` 기준.
+DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.3).md` 기준.
 
 ### 5.1 Label 기본 규칙
 
@@ -121,9 +138,11 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.2).md` 기준.
 ```json
 {
   "mode": "input",
+  "intent": "create",
   "date": "2026-02-11",
   "summary": "회의",
   "time": "09:00",
+  "repeatYearly": false,
   "categoryId": "work",
   "placeText": "",
   "body": "내일 9시 회의",
@@ -131,6 +150,11 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.2).md` 기준.
   "missingRequired": []
 }
 ```
+
+Input 추가 규칙:
+
+- `intent`는 `create`, `update`, `delete` 중 하나
+- `repeatYearly`는 연간 반복 제안 시 사용 가능
 
 ### 6.2 Search Interpretation
 
@@ -221,7 +245,50 @@ Search 응답 유효성 규칙:
 }
 ```
 
-### 6.4 에러 응답 권장 형식
+허용 field:
+
+- `summary`
+- `time`
+- `category`
+- `place`
+- `labels`
+- `body`
+
+### 6.4 Modify Interpretation
+
+- Path: `/ai/modify-interpret`
+- Request:
+
+```json
+{
+  "mode": "modify",
+  "transcript": "시간을 3시 반으로 바꿔줘",
+  "selectedDate": "2026-02-11",
+  "currentSummary": "회의",
+  "currentTime": "09:00",
+  "currentCategoryId": "work",
+  "currentPlaceText": "",
+  "currentBody": "내일 9시 회의",
+  "currentLabels": ["팀"]
+}
+```
+
+- Response:
+
+```json
+{
+  "mode": "modify",
+  "summary": "회의",
+  "time": "15:30",
+  "categoryId": "work",
+  "placeText": "",
+  "body": "내일 9시 회의",
+  "labels": ["팀"],
+  "missingRequired": []
+}
+```
+
+### 6.5 에러 응답 권장 형식
 
 ```json
 {
@@ -236,9 +303,16 @@ Search 응답 유효성 규칙:
 ## 7) 백엔드 구현 요구사항
 
 - 필수 엔드포인트:
+  - `GET /app/version`
+  - `GET /app/download-apk`
+  - `GET /holidays`
+  - `POST /auth/signup`
+  - `POST /auth/login`
+  - `GET /usage/me`
   - `POST /ai/input-interpret`
   - `POST /ai/search-interpret`
   - `POST /ai/refine-field`
+  - `POST /ai/modify-interpret`
 - 입력 검증:
   - mode mismatch 거절
   - transcript 누락 거절
@@ -250,6 +324,84 @@ Search 응답 유효성 규칙:
   - upstream LLM timeout/retry 정책
 
 ---
+
+## 8) 클라이언트/배포 설정
+
+설정 위치:
+
+- `app/APP_CLIENT_CONFIG.txt`
+- `~/.gradle/gradle.properties` 또는 프로젝트 `local.properties`(gitignored)
+
+예시:
+
+```properties
+SERVER_BASE_URL=https://echo-calendar.win
+APP_VERSION_CODE=23
+APP_VERSION_NAME=0.9.31
+```
+
+추가 예시:
+
+```properties
+AI_API_BASE_URL=https://your-api.example.com
+AI_API_KEY=your-secret
+AI_API_BASE_URL_DEBUG=https://dev-api.example.com
+AI_API_BASE_URL_RELEASE=https://prod-api.example.com
+AI_API_KEY_DEBUG=
+AI_API_KEY_RELEASE=
+AI_API_TIMEOUT_MS=12000
+AI_SEND_CLIENT_API_KEY_DEBUG=false
+AI_SEND_CLIENT_API_KEY_RELEASE=false
+AI_REQUIRE_HTTPS_DEBUG=false
+AI_REQUIRE_HTTPS_RELEASE=true
+```
+
+보안 권장:
+
+- Release는 백엔드 경유 + HTTPS
+- `AI_SEND_CLIENT_API_KEY_RELEASE=false`
+
+---
+
+## 9) 로컬 검증 절차
+
+### 9.1 로컬 계약 스텁 실행
+
+```bash
+python server/tools/ai_contract_server.py
+```
+
+### 9.2 계약 체크 실행
+
+```bash
+python server/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
+```
+
+### 9.3 E2E 스모크
+
+- AI 입력: transcript -> suggestion popup
+- AI 검색: transcript -> strategy + query/filters -> 결과 목록
+- 필드 보완: target field only
+- AI 수정: 기존 이벤트 기준 patch 제안
+- 원격 실패 시 오류 메시지
+- labels-only 검색 응답 동작 확인
+- 라벨 유사 대체/최대 5개 제한 확인
+
+---
+
+## 10) 운영 관측
+
+- 앱 로그(`AiAssistantService`) 확인:
+  - `remote_success action=...`
+  - `remote_failure action=... reason=...`
+- input/search/refine 각각 최소 1회 원격 성공 로그 확인
+
+---
+
+## 11) 빌드 환경 주의
+
+- Gradle/JDK는 17 또는 21 사용 권장
+- JDK 25 환경에서는 일부 스택에서 호환 이슈가 발생할 수 있음
 
 ## 8) 클라이언트/배포 설정
 
@@ -299,7 +451,7 @@ python server/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:808
 - AI 입력: transcript -> suggestion popup
 - AI 검색: transcript -> strategy + query/filters -> 결과 목록
 - 필드 보완: target field only
-- 원격 실패 시 fallback 메시지
+- 원격 실패 시 오류 메시지
 - labels-only 검색 응답 동작 확인
 - 라벨 유사 대체/최대 5개 제한 확인
 
@@ -309,7 +461,7 @@ python server/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:808
 
 - 앱 로그(`AiAssistantService`) 확인:
   - `remote_success action=...`
-  - `remote_failure_fallback action=... reason=...`
+  - `remote_failure action=... reason=...`
 - input/search/refine 각각 최소 1회 원격 성공 로그 확인
 
 ---
