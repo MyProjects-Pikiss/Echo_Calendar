@@ -53,8 +53,8 @@ APP_LATEST_VERSION_NAME=0.9.1
 APP_MIN_SUPPORTED_VERSION_CODE=3
 
 APP_DOWNLOADS_DIR=downloads
-APP_APK_FILENAME=echo-calendar-latest.apk
-APP_APK_DOWNLOAD_URL=https://echo-calendar.win/downloads/echo-calendar-latest.apk
+APP_APK_FILENAME=echo_calendar.apk
+APP_APK_DOWNLOAD_URL=https://echo-calendar.win/app/download-apk
 ```
 
 설명:
@@ -65,10 +65,11 @@ APP_APK_DOWNLOAD_URL=https://echo-calendar.win/downloads/echo-calendar-latest.ap
 
 1. 릴리즈 APK 빌드
 2. 파일을 아래 위치에 복사
-   - `server/downloads/echo-calendar-latest.apk`
-3. Docker Compose 재시작
-4. 링크 확인
-   - `https://echo-calendar.win/downloads/echo-calendar-latest.apk`
+   - `server/downloads/echo_calendar.apk`
+3. 버전만 바뀐 경우 `server/SYNC_APP_VERSION.bat` 실행
+4. 백엔드 코드까지 바뀐 경우 `docker compose ... up --build -d` 또는 `server/RUN_DOCKER_BACKEND.bat` 실행
+5. 링크 확인
+   - `https://echo-calendar.win/app/download-apk`
 
 ## 5) 실행
 
@@ -97,7 +98,7 @@ APP_VERSION_NAME=0.9.1
 
 - 서버 헬스: `https://echo-calendar.win/health`
 - 버전 API: `https://echo-calendar.win/app/version?currentVersionCode=1`
-- APK 다운로드: `https://echo-calendar.win/downloads/echo-calendar-latest.apk`
+- APK 다운로드: `https://echo-calendar.win/app/download-apk`
 
 버전 API 응답에서 `apkDownloadUrl`이 위 도메인으로 내려오면 정상입니다.
 

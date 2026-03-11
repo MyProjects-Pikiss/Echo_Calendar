@@ -81,21 +81,34 @@ docker compose \
 ## 5) APK 배포
 
 1. 릴리즈 APK 빌드
-2. `server/downloads/echo-calendar-latest.apk`에 복사
-3. 외부 env 파일에서 아래 값을 맞춤
-   - `APP_DOWNLOADS_DIR=downloads`
-   - `APP_APK_FILENAME=echo-calendar-latest.apk`
-   - `APP_APK_DOWNLOAD_URL=https://echo-calendar.win/downloads/echo-calendar-latest.apk`
-   - `APP_LATEST_VERSION_CODE=<새 버전 코드>`
-   - `APP_LATEST_VERSION_NAME=<새 버전 이름>`
-   - `APP_MIN_SUPPORTED_VERSION_CODE=<최소 지원 코드>`
-4. Docker Compose 재시작
+2. `server/downloads/echo_calendar.apk`에 복사
+3. 앱 버전은 `app/APP_CLIENT_CONFIG.txt`의 `APP_VERSION_CODE`, `APP_VERSION_NAME`만 수정
+4. 버전 정보만 갱신할 때는 `server/SYNC_APP_VERSION.bat` 실행
+   - 이 BAT는 `server/tools/sync_app_version.py`를 호출해 `server/downloads/app_version.env`를 갱신함
+   - 이미 최신 서버 코드가 떠 있다면 이 단계만으로 `/app/version` 응답이 즉시 반영됨
+5. 최소 지원 버전만 필요할 때 외부 env 파일의 `APP_MIN_SUPPORTED_VERSION_CODE`를 별도로 조정
+6. 백엔드 코드가 바뀐 경우에는 Docker Desktop의 단순 Restart가 아니라 재빌드가 필요
+   - `server/RUN_DOCKER_BACKEND.bat`
+   - 또는 `docker compose ... up --build -d`
+
+```powershell
+cd server
+SYNC_APP_VERSION.bat
+```
+
+백엔드 코드 변경까지 포함된 배포의 경우:
+
+```powershell
+cd server
+RUN_DOCKER_BACKEND.bat
+```
 
 ## 6) 확인 주소
 
 - 서버 헬스: `https://echo-calendar.win/health`
 - 사용량 대시보드: `https://echo-calendar.win/usage/dashboard`
-- APK 다운로드: `https://echo-calendar.win/downloads/echo-calendar-latest.apk`
+- 버전 API: `https://echo-calendar.win/app/version?currentVersionCode=1`
+- APK 다운로드: `https://echo-calendar.win/app/download-apk`
 
 ## 7) 다른 PC로 옮길 때
 
@@ -127,6 +140,9 @@ CLOUDFLARED_DIR=C:\Users\<사용자명>\.cloudflared
 
 - `Env file not found`
   - `server/.env`의 `BACKEND_EXTERNAL_ENV_PATH`가 실제 파일을 가리키는지 확인
+- `apk file not found`
+  - `server/downloads/echo_calendar.apk` 파일이 실제로 존재하는지 확인
+  - Docker Desktop에서 단순 Restart만 한 경우 코드 변경이 반영되지 않을 수 있으므로 `RUN_DOCKER_BACKEND.bat` 또는 `docker compose ... up --build -d`로 재빌드
 - `cloudflared`가 backend에 연결하지 못함
   - `.cloudflared/config.yml`의 서비스 주소가 `http://backend:8088`인지 확인
 - `OPENAI_API_KEY` 비어 있음

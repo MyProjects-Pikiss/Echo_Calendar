@@ -67,7 +67,7 @@ llm_client = OpenAILlmClient()
 rate_limiter = SimpleRateLimiter(max_requests=settings.rate_limit_per_minute, window_seconds=60)
 holiday_db_path = Path(settings.holiday_db_path)
 usage_db_path = Path(settings.usage_db_path)
-server_root_path = Path(__file__).resolve().parents[2]
+server_root_path = Path(__file__).resolve().parents[1]
 downloads_dir = Path(settings.app_downloads_dir)
 if not downloads_dir.is_absolute():
     downloads_dir = server_root_path / downloads_dir
@@ -76,6 +76,7 @@ dashboard_html_path = Path(__file__).resolve().parent / "templates" / "usage_das
 _usage_event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(maxsize=5000)
 usage_kafka_producer = KafkaUsageProducer()
 app.mount("/downloads", StaticFiles(directory=str(downloads_dir), check_dir=False), name="downloads")
+runtime_version_file_path = downloads_dir / "app_version.env"
 
 
 def _is_path_enabled(path: str) -> bool:
@@ -291,6 +292,46 @@ def _resolve_apk_file_path() -> Path | None:
     return apk_path
 
 
+def _parse_key_value_file(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = value.strip()
+    return values
+
+
+def _resolve_app_version_state() -> tuple[int, int, str]:
+    runtime_values = _parse_key_value_file(runtime_version_file_path)
+
+    latest_version_code = runtime_values.get("APP_LATEST_VERSION_CODE", str(settings.app_latest_version_code))
+    min_supported_version_code = runtime_values.get(
+        "APP_MIN_SUPPORTED_VERSION_CODE",
+        str(settings.app_min_supported_version_code),
+    )
+    latest_version_name = runtime_values.get("APP_LATEST_VERSION_NAME", settings.app_latest_version_name).strip()
+
+    try:
+        resolved_latest = max(1, int(latest_version_code))
+    except ValueError:
+        resolved_latest = max(1, settings.app_latest_version_code)
+
+    try:
+        resolved_min_supported = max(1, int(min_supported_version_code))
+    except ValueError:
+        resolved_min_supported = max(1, settings.app_min_supported_version_code)
+
+    resolved_name = latest_version_name or str(resolved_latest)
+    return resolved_latest, resolved_min_supported, resolved_name
+
+
 async def _usage_worker() -> None:
     while True:
         event = await _usage_event_queue.get()
@@ -341,9 +382,7 @@ async def health() -> dict[str, Any]:
 
 @app.get("/app/version")
 async def app_version(request: Request, currentVersionCode: int = 0) -> JSONResponse:
-    latest_version_code = max(1, settings.app_latest_version_code)
-    min_supported_version_code = max(1, settings.app_min_supported_version_code)
-    latest_version_name = settings.app_latest_version_name.strip() or str(latest_version_code)
+    latest_version_code, min_supported_version_code, latest_version_name = _resolve_app_version_state()
 
     has_update = currentVersionCode < latest_version_code
     required = currentVersionCode < min_supported_version_code
