@@ -83,7 +83,7 @@ docker compose \
 1. 릴리즈 APK 빌드
 2. `server/downloads/echo_calendar.apk`에 복사
 3. 앱 버전은 `app/APP_CLIENT_CONFIG.txt`의 `APP_VERSION_CODE`, `APP_VERSION_NAME`만 수정
-4. 버전 정보만 갱신할 때는 `server/SYNC_APP_VERSION.bat` 실행
+4. 버전 정보만 갱신할 때는 `server/downloads/SYNC_APP_VERSION.bat` 실행
    - 이 BAT는 `server/tools/sync_app_version.py`를 호출해 `server/downloads/app_version.env`를 갱신함
    - 이미 최신 서버 코드가 떠 있다면 이 단계만으로 `/app/version` 응답이 즉시 반영됨
 5. 최소 지원 버전만 필요할 때 외부 env 파일의 `APP_MIN_SUPPORTED_VERSION_CODE`를 별도로 조정
@@ -93,7 +93,7 @@ docker compose \
 
 ```powershell
 cd server
-SYNC_APP_VERSION.bat
+downloads\SYNC_APP_VERSION.bat
 ```
 
 백엔드 코드 변경까지 포함된 배포의 경우:

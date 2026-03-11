@@ -66,7 +66,7 @@ APP_APK_DOWNLOAD_URL=https://echo-calendar.win/app/download-apk
 1. 릴리즈 APK 빌드
 2. 파일을 아래 위치에 복사
    - `server/downloads/echo_calendar.apk`
-3. 버전만 바뀐 경우 `server/SYNC_APP_VERSION.bat` 실행
+3. 버전만 바뀐 경우 `server/downloads/SYNC_APP_VERSION.bat` 실행
 4. 백엔드 코드까지 바뀐 경우 `docker compose ... up --build -d` 또는 `server/RUN_DOCKER_BACKEND.bat` 실행
 5. 링크 확인
    - `https://echo-calendar.win/app/download-apk`

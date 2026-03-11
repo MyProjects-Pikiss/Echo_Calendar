@@ -312,10 +312,6 @@ def _resolve_app_version_state() -> tuple[int, int, str]:
     runtime_values = _parse_key_value_file(runtime_version_file_path)
 
     latest_version_code = runtime_values.get("APP_LATEST_VERSION_CODE", str(settings.app_latest_version_code))
-    min_supported_version_code = runtime_values.get(
-        "APP_MIN_SUPPORTED_VERSION_CODE",
-        str(settings.app_min_supported_version_code),
-    )
     latest_version_name = runtime_values.get("APP_LATEST_VERSION_NAME", settings.app_latest_version_name).strip()
 
     try:
@@ -323,13 +319,8 @@ def _resolve_app_version_state() -> tuple[int, int, str]:
     except ValueError:
         resolved_latest = max(1, settings.app_latest_version_code)
 
-    try:
-        resolved_min_supported = max(1, int(min_supported_version_code))
-    except ValueError:
-        resolved_min_supported = max(1, settings.app_min_supported_version_code)
-
     resolved_name = latest_version_name or str(resolved_latest)
-    return resolved_latest, resolved_min_supported, resolved_name
+    return resolved_latest, 1, resolved_name
 
 
 async def _usage_worker() -> None:
@@ -385,7 +376,7 @@ async def app_version(request: Request, currentVersionCode: int = 0) -> JSONResp
     latest_version_code, min_supported_version_code, latest_version_name = _resolve_app_version_state()
 
     has_update = currentVersionCode < latest_version_code
-    required = currentVersionCode < min_supported_version_code
+    required = False
 
     response = AppVersionCheckResponse(
         hasUpdate=has_update,
