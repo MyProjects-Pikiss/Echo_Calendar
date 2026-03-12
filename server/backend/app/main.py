@@ -142,6 +142,15 @@ async def _mode_gate_middleware(request: Request, call_next):
     )
 
 
+@app.middleware("http")
+async def _ai_auth_middleware(request: Request, call_next):
+    if not request.url.path.startswith("/ai/"):
+        return await call_next(request)
+    if _auth_user_from_request(request) is not None:
+        return await call_next(request)
+    return stable_error("auth", "UNAUTHORIZED", "valid bearer token is required", status=401)
+
+
 def stable_error(mode: str, error_code: str, message: str, status: int = 400) -> JSONResponse:
     return JSONResponse(
         status_code=status,

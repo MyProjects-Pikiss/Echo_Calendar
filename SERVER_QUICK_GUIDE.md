@@ -77,6 +77,9 @@ docker compose \
   - `SERVER_BASE_URL=https://echo-calendar.win`
 - 앱 버전 체크 API:
   - `GET /app/version?currentVersionCode=<정수>`
+- AI 기능 API:
+  - `/ai/*` 엔드포인트는 로그인 후 받은 Bearer 토큰이 있어야 호출 가능
+  - 인증 없는 요청은 `401 Unauthorized`
 
 ## 5) APK 배포
 
@@ -143,6 +146,9 @@ CLOUDFLARED_DIR=C:\Users\<사용자명>\.cloudflared
 - `apk file not found`
   - `server/downloads/echo_calendar.apk` 파일이 실제로 존재하는지 확인
   - Docker Desktop에서 단순 Restart만 한 경우 코드 변경이 반영되지 않을 수 있으므로 `RUN_DOCKER_BACKEND.bat` 또는 `docker compose ... up --build -d`로 재빌드
+- AI 호출이 `401 Unauthorized`
+  - 앱 로그인 후 발급된 사용량 세션 토큰이 요청에 포함되어야 함
+  - 서버는 이제 인증 없는 `/ai/*` 요청을 허용하지 않음
 - `cloudflared`가 backend에 연결하지 못함
   - `.cloudflared/config.yml`의 서비스 주소가 `http://backend:8088`인지 확인
 - `OPENAI_API_KEY` 비어 있음

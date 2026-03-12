@@ -50,7 +50,7 @@ ALLOW_SIGNUP=false
 
 APP_LATEST_VERSION_CODE=3
 APP_LATEST_VERSION_NAME=0.9.1
-APP_MIN_SUPPORTED_VERSION_CODE=3
+APP_MIN_SUPPORTED_VERSION_CODE=1
 
 APP_DOWNLOADS_DIR=downloads
 APP_APK_FILENAME=echo_calendar.apk
@@ -59,7 +59,7 @@ APP_APK_DOWNLOAD_URL=https://echo-calendar.win/app/download-apk
 
 설명:
 - `APP_APK_DOWNLOAD_URL`를 명시하면 프록시/스킴 이슈 없이 항상 고정 URL을 내려줍니다.
-- 강제 업데이트를 원하면 `APP_MIN_SUPPORTED_VERSION_CODE`를 최신과 같게 유지하세요.
+- 현재 운영 기준은 강제 업데이트를 쓰지 않으므로 `APP_MIN_SUPPORTED_VERSION_CODE=1`로 유지합니다.
 
 ## 4) APK 파일 배치
 
@@ -93,6 +93,10 @@ APP_VERSION_NAME=0.9.1
 ```
 
 그 다음 앱을 다시 빌드/설치하세요.
+
+참고:
+- `/ai/*` 엔드포인트는 로그인 후 받은 Bearer 토큰이 있어야 호출됩니다.
+- 따라서 앱에서 로그인하지 않으면 AI 기능은 사용할 수 없습니다.
 
 ## 7) 최종 확인 URL
 

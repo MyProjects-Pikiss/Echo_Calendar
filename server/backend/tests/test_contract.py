@@ -1,15 +1,42 @@
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
+import app.main as main_module
 from app.main import app
+from app.usage_store import create_session, create_user, init_usage_db
 
 
 client = TestClient(app)
 
 
-def test_input_requires_mode_match():
+@pytest.fixture
+def auth_headers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="contract_user", password="pw-1234")
+    token = create_session(db_path, user["id"])
+    monkeypatch.setattr(main_module, "usage_db_path", db_path)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_ai_requires_auth():
+    response = client.post(
+        "/ai/search-interpret",
+        json={"mode": "search", "transcript": "병원 일정 찾아줘"},
+    )
+    assert response.status_code == 401
+    data = response.json()
+    assert data["mode"] == "auth"
+    assert data["errorCode"] == "UNAUTHORIZED"
+
+
+def test_input_requires_mode_match(auth_headers: dict[str, str]):
     response = client.post(
         "/ai/input-interpret",
         json={"mode": "search", "transcript": "내일 회의", "selectedDate": "2026-02-11"},
+        headers=auth_headers,
     )
     assert response.status_code == 400
     data = response.json()
@@ -17,15 +44,19 @@ def test_input_requires_mode_match():
     assert data["errorCode"] == "MODE_MISMATCH"
 
 
-def test_search_missing_transcript():
-    response = client.post("/ai/search-interpret", json={"mode": "search", "transcript": ""})
+def test_search_missing_transcript(auth_headers: dict[str, str]):
+    response = client.post(
+        "/ai/search-interpret",
+        json={"mode": "search", "transcript": ""},
+        headers=auth_headers,
+    )
     assert response.status_code == 400
     data = response.json()
     assert data["mode"] == "search"
     assert data["errorCode"] == "MISSING_TRANSCRIPT"
 
 
-def test_refine_invalid_field():
+def test_refine_invalid_field(auth_headers: dict[str, str]):
     response = client.post(
         "/ai/refine-field",
         json={
@@ -35,6 +66,7 @@ def test_refine_invalid_field():
             "currentValue": "",
             "selectedDate": "2026-02-11",
         },
+        headers=auth_headers,
     )
     assert response.status_code == 400
     data = response.json()
@@ -42,10 +74,11 @@ def test_refine_invalid_field():
     assert data["errorCode"] == "INVALID_FIELD"
 
 
-def test_input_success_includes_mode():
+def test_input_success_includes_mode(auth_headers: dict[str, str]):
     response = client.post(
         "/ai/input-interpret",
         json={"mode": "input", "transcript": "내일 9시 회의", "selectedDate": "2026-02-11"},
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
@@ -53,10 +86,11 @@ def test_input_success_includes_mode():
     assert "summary" in data
 
 
-def test_search_success_includes_labels():
+def test_search_success_includes_labels(auth_headers: dict[str, str]):
     response = client.post(
         "/ai/search-interpret",
         json={"mode": "search", "transcript": "병원 #진료 일정 찾아줘"},
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
@@ -66,7 +100,7 @@ def test_search_success_includes_labels():
     assert data["sortOrder"] in {"asc", "desc"}
 
 
-def test_modify_success_includes_patch_fields():
+def test_modify_success_includes_patch_fields(auth_headers: dict[str, str]):
     response = client.post(
         "/ai/modify-interpret",
         json={
@@ -80,6 +114,7 @@ def test_modify_success_includes_patch_fields():
             "currentBody": "",
             "currentLabels": [],
         },
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
