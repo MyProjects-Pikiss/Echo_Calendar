@@ -369,6 +369,7 @@
             <col style="width: 150px;" />
             <col style="width: 100px;" />
             <col style="width: 130px;" />
+            <col style="width: 130px;" />
             <col style="width: 52px;" />
             <col style="width: 82px;" />
             <col style="width: 82px;" />
@@ -384,6 +385,7 @@
               <th class="nowrap">시간</th>
               <th class="nowrap">엔드포인트</th>
               <th class="nowrap">모델</th>
+              <th class="nowrap">IP</th>
               <th class="nowrap">성공</th>
               <th class="nowrap">입력 토큰</th>
               <th class="nowrap">출력 토큰</th>
@@ -599,10 +601,12 @@
         const llmInput = e.llmInput || "-";
         const llmOutput = e.llmOutput || "-";
         const transcript = e.transcript || "-";
+        const clientIp = e.clientIp || "-";
         tr.innerHTML = `
           <td class="nowrap">${fmtTime(e.createdAt)}</td>
           <td class="nowrap" title="${esc(e.endpoint || "-")}">${esc(e.endpoint || "-")}</td>
           <td class="nowrap" title="${esc(e.model || "-")}">${esc(e.model || "-")}</td>
+          <td class="nowrap" title="${esc(clientIp)}">${esc(clientIp)}</td>
           <td class="nowrap">${e.success ? "Y" : "N"}</td>
           <td class="nowrap">${fmtInt(e.inputTokens)}</td>
           <td class="nowrap">${fmtInt(e.outputTokens)}</td>
@@ -726,11 +730,11 @@
       const table = byId("eventsTable");
       if (!table) return;
       const cols = table.querySelectorAll("colgroup col");
-      if (!cols || cols.length < 10) return;
+      if (!cols || cols.length < 11) return;
       const hasOpen = byId("eventsBody").querySelector(".llm-details[open]") !== null;
       const width = hasOpen ? 260 : 150;
-      cols[8].style.width = `${width}px`;
       cols[9].style.width = `${width}px`;
+      cols[10].style.width = `${width}px`;
     }
 
     function setupLlmInteractions() {

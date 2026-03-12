@@ -75,6 +75,7 @@ def init_usage_db(db_path: Path) -> None:
         )
         _ensure_usage_events_input_column(conn)
         _ensure_usage_events_output_column(conn)
+        _ensure_usage_events_client_ip_column(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_user_created ON usage_events(user_id, created_at)")
@@ -216,6 +217,7 @@ def log_usage_event(
     latency_ms: int = 0,
     llm_input_text: str | None = None,
     llm_output_text: str | None = None,
+    client_ip: str | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
 ) -> None:
@@ -226,9 +228,9 @@ def log_usage_event(
             INSERT INTO usage_events(
                 user_id, endpoint, model, transcript, success,
                 input_tokens, output_tokens, total_tokens, latency_ms,
-                llm_input_text, llm_output_text, error_code, error_message, created_at
+                llm_input_text, llm_output_text, client_ip, error_code, error_message, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -242,6 +244,7 @@ def log_usage_event(
                 max(0, latency_ms),
                 llm_input_text,
                 llm_output_text,
+                client_ip.strip() if client_ip else None,
                 error_code,
                 error_message,
                 now,
@@ -331,7 +334,7 @@ def usage_user_detail(db_path: Path, user_id: str | None, limit: int = 100) -> d
             SELECT
                 endpoint, model, transcript, success,
                 input_tokens, output_tokens, total_tokens, latency_ms,
-                llm_input_text, llm_output_text, error_code, error_message, created_at
+                llm_input_text, llm_output_text, client_ip, error_code, error_message, created_at
             FROM usage_events ue
             WHERE {where_sql}
             ORDER BY created_at DESC
@@ -359,6 +362,7 @@ def usage_user_detail(db_path: Path, user_id: str | None, limit: int = 100) -> d
                 "latencyMs": int(row["latency_ms"] or 0),
                 "llmInput": str(row["llm_input_text"]) if row["llm_input_text"] is not None else None,
                 "llmOutput": str(row["llm_output_text"]) if row["llm_output_text"] is not None else None,
+                "clientIp": str(row["client_ip"]) if row["client_ip"] is not None else None,
                 "errorCode": str(row["error_code"]) if row["error_code"] is not None else None,
                 "errorMessage": str(row["error_message"]) if row["error_message"] is not None else None,
                 "createdAt": int(row["created_at"] or 0),
@@ -453,6 +457,13 @@ def _ensure_usage_events_output_column(conn: sqlite3.Connection) -> None:
     column_names = {str(row["name"]) for row in columns}
     if "llm_output_text" not in column_names:
         conn.execute("ALTER TABLE usage_events ADD COLUMN llm_output_text TEXT")
+
+
+def _ensure_usage_events_client_ip_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(usage_events)").fetchall()
+    column_names = {str(row["name"]) for row in columns}
+    if "client_ip" not in column_names:
+        conn.execute("ALTER TABLE usage_events ADD COLUMN client_ip TEXT")
 
 
 def _normalize_role(role: str) -> str:

@@ -159,6 +159,9 @@ def stable_error(mode: str, error_code: str, message: str, status: int = 400) ->
 
 
 def _get_client_key(request: Request) -> str:
+    cloudflare_ip = request.headers.get("cf-connecting-ip", "").split(",")[0].strip()
+    if cloudflare_ip:
+        return cloudflare_ip
     forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if forwarded:
         return forwarded
@@ -243,6 +246,7 @@ def _record_ai_usage(
     started_at: float | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
+    client_ip: str | None = None,
 ) -> None:
     latency_ms = 0
     if started_at is not None:
@@ -271,6 +275,7 @@ def _record_ai_usage(
         "latency_ms": latency_ms,
         "llm_input_text": llm_input_text,
         "llm_output_text": llm_output_text,
+        "client_ip": client_ip,
         "error_code": error_code,
         "error_message": error_message,
     }
@@ -613,6 +618,7 @@ async def holidays(startDate: str, endDate: str) -> JSONResponse:
 @app.post("/ai/input-interpret")
 async def input_interpret(request: Request) -> JSONResponse:
     client_key = _get_client_key(request)
+    client_ip = client_key
     if not rate_limiter.allow(client_key):
         return stable_error("input", "RATE_LIMITED", "rate limit exceeded", status=429)
 
@@ -661,6 +667,7 @@ async def input_interpret(request: Request) -> JSONResponse:
                 llm_input_payload={"system": system_prompt, "user": user_prompt},
                 llm_output_payload=completion.payload,
                 started_at=started_at,
+                client_ip=client_ip,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
         except LlmClientError as exc:
@@ -671,6 +678,7 @@ async def input_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="UPSTREAM_FAILURE",
                 error_message=str(exc),
             )
@@ -684,6 +692,7 @@ async def input_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="INVALID_SCHEMA",
                 error_message=str(exc),
             )
@@ -697,6 +706,7 @@ async def input_interpret(request: Request) -> JSONResponse:
             transcript=transcript,
             success=False,
             started_at=started_at,
+            client_ip=client_ip,
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
@@ -714,6 +724,7 @@ async def input_interpret(request: Request) -> JSONResponse:
         transcript=transcript,
         success=True,
         started_at=started_at,
+        client_ip=client_ip,
     )
     return JSONResponse(status_code=200, content=fallback.model_dump())
 
@@ -721,6 +732,7 @@ async def input_interpret(request: Request) -> JSONResponse:
 @app.post("/ai/search-interpret")
 async def search_interpret(request: Request) -> JSONResponse:
     client_key = _get_client_key(request)
+    client_ip = client_key
     if not rate_limiter.allow(client_key):
         return stable_error("search", "RATE_LIMITED", "rate limit exceeded", status=429)
 
@@ -756,6 +768,7 @@ async def search_interpret(request: Request) -> JSONResponse:
                 llm_input_payload={"system": system_prompt, "user": user_prompt},
                 llm_output_payload=completion.payload,
                 started_at=started_at,
+                client_ip=client_ip,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
         except LlmClientError as exc:
@@ -766,6 +779,7 @@ async def search_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="UPSTREAM_FAILURE",
                 error_message=str(exc),
             )
@@ -779,6 +793,7 @@ async def search_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="INVALID_SCHEMA",
                 error_message=str(exc),
             )
@@ -792,6 +807,7 @@ async def search_interpret(request: Request) -> JSONResponse:
             transcript=transcript,
             success=False,
             started_at=started_at,
+            client_ip=client_ip,
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
@@ -809,6 +825,7 @@ async def search_interpret(request: Request) -> JSONResponse:
         transcript=transcript,
         success=True,
         started_at=started_at,
+        client_ip=client_ip,
     )
     return JSONResponse(status_code=200, content=fallback.model_dump())
 
@@ -816,6 +833,7 @@ async def search_interpret(request: Request) -> JSONResponse:
 @app.post("/ai/refine-field")
 async def refine_field(request: Request) -> JSONResponse:
     client_key = _get_client_key(request)
+    client_ip = client_key
     if not rate_limiter.allow(client_key):
         return stable_error("refine", "RATE_LIMITED", "rate limit exceeded", status=429)
 
@@ -866,6 +884,7 @@ async def refine_field(request: Request) -> JSONResponse:
                 llm_input_payload={"system": system_prompt, "user": user_prompt},
                 llm_output_payload=completion.payload,
                 started_at=started_at,
+                client_ip=client_ip,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
         except LlmClientError as exc:
@@ -876,6 +895,7 @@ async def refine_field(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="UPSTREAM_FAILURE",
                 error_message=str(exc),
             )
@@ -889,6 +909,7 @@ async def refine_field(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="INVALID_SCHEMA",
                 error_message=str(exc),
             )
@@ -902,6 +923,7 @@ async def refine_field(request: Request) -> JSONResponse:
             transcript=transcript,
             success=False,
             started_at=started_at,
+            client_ip=client_ip,
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
@@ -919,6 +941,7 @@ async def refine_field(request: Request) -> JSONResponse:
         transcript=transcript,
         success=True,
         started_at=started_at,
+        client_ip=client_ip,
     )
     return JSONResponse(status_code=200, content=fallback.model_dump())
 
@@ -926,6 +949,7 @@ async def refine_field(request: Request) -> JSONResponse:
 @app.post("/ai/modify-interpret")
 async def modify_interpret(request: Request) -> JSONResponse:
     client_key = _get_client_key(request)
+    client_ip = client_key
     if not rate_limiter.allow(client_key):
         return stable_error("modify", "RATE_LIMITED", "rate limit exceeded", status=429)
 
@@ -974,6 +998,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 llm_input_payload={"system": system_prompt, "user": user_prompt},
                 llm_output_payload=completion.payload,
                 started_at=started_at,
+                client_ip=client_ip,
             )
             return JSONResponse(status_code=200, content=guarded.model_dump())
         except LlmClientError as exc:
@@ -984,6 +1009,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="UPSTREAM_FAILURE",
                 error_message=str(exc),
             )
@@ -997,6 +1023,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 transcript=transcript,
                 success=False,
                 started_at=started_at,
+                client_ip=client_ip,
                 error_code="INVALID_SCHEMA",
                 error_message=str(exc),
             )
@@ -1010,6 +1037,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
             transcript=transcript,
             success=False,
             started_at=started_at,
+            client_ip=client_ip,
             error_code="UPSTREAM_UNAVAILABLE",
             error_message="llm client is disabled and local fallback is disabled",
         )
@@ -1035,5 +1063,6 @@ async def modify_interpret(request: Request) -> JSONResponse:
         transcript=transcript,
         success=True,
         started_at=started_at,
+        client_ip=client_ip,
     )
     return JSONResponse(status_code=200, content=fallback.model_dump())

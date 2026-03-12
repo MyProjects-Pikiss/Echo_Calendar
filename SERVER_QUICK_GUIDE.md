@@ -110,6 +110,7 @@ RUN_DOCKER_BACKEND.bat
 
 - 서버 헬스: `https://echo-calendar.win/health`
 - 사용량 대시보드: `https://echo-calendar.win/usage/dashboard`
+  - 이벤트 상세 테이블에서 요청 IP를 확인할 수 있음
 - 버전 API: `https://echo-calendar.win/app/version?currentVersionCode=1`
 - APK 다운로드: `https://echo-calendar.win/app/download-apk`
 

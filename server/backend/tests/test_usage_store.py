@@ -8,6 +8,8 @@ from app.usage_store import (
     ensure_admin_user,
     get_user_by_session,
     init_usage_db,
+    log_usage_event,
+    usage_user_detail,
 )
 
 
@@ -75,3 +77,24 @@ def test_ensure_admin_user_promotes_existing_target_when_no_admin_exists(tmp_pat
     roles = _fetch_user_roles(db_path)
     assert roles["env_admin"] == "admin"
     assert authenticate_user(db_path, "env_admin", "env-pw") is not None
+
+
+def test_usage_user_detail_includes_client_ip(tmp_path):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="viewer", password="pw-user", role="user")
+    log_usage_event(
+        db_path,
+        user_id=user["id"],
+        endpoint="/ai/search-interpret",
+        model="gpt-5-nano",
+        transcript="병원 일정",
+        success=True,
+        total_tokens=12,
+        client_ip="203.0.113.10",
+    )
+
+    detail = usage_user_detail(db_path, user["id"])
+
+    assert len(detail["events"]) == 1
+    assert detail["events"][0]["clientIp"] == "203.0.113.10"

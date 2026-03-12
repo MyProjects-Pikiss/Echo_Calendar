@@ -103,6 +103,8 @@ APP_VERSION_NAME=0.9.1
 - 서버 헬스: `https://echo-calendar.win/health`
 - 버전 API: `https://echo-calendar.win/app/version?currentVersionCode=1`
 - APK 다운로드: `https://echo-calendar.win/app/download-apk`
+- 사용량 대시보드: `https://echo-calendar.win/usage/dashboard`
+  - 로그인 후 이벤트 상세에서 요청 IP 확인 가능
 
 버전 API 응답에서 `apkDownloadUrl`이 위 도메인으로 내려오면 정상입니다.
 
