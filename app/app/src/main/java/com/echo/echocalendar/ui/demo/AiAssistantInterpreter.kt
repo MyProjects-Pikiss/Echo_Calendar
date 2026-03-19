@@ -122,9 +122,17 @@ object AiAssistantInterpreter {
             return explicit.take(40)
         }
         return source
+            .replace(
+                Regex(
+                    """\b\d{4}[./-]\d{1,2}[./-]\d{1,2}\b|\b\d{1,2}[./-]\d{1,2}\b|오늘|내일|모레|글피|어제|다음\s*주|이번\s*주|지난\s*주|다음\s*달|이번\s*달|지난\s*달"""
+                ),
+                " "
+            )
             .replace(Regex("""(삭제|지워|지워줘|취소|수정|바꿔|변경|고쳐)(해줘|해 줘)?"""), " ")
             .replace(Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b"""), "")
             .replace(Regex("""([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?"""), "")
+            .replace(Regex("""(기록해줘|기록해 줘|추가해줘|추가해 줘|등록해줘|등록해 줘)"""), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
             .take(40)
     }

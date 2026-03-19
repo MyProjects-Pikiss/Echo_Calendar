@@ -33,11 +33,19 @@ def input_prompts(transcript: str, selected_date: str) -> tuple[str, str]:
         "repeatYearly must be true/false/null. Use true for birthday or yearly recurring intent. "
         f"categoryId should be one of: {', '.join(KNOWN_CATEGORY_IDS)}. "
         "If uncertain, use categoryId='other'. "
+        "summary must be a natural event title in Korean, not an over-compressed keyword. "
+        "Keep the event identifiable at a glance. Preserve important participants, counterparties, or distinguishing context when they are central to the request. "
+        "Do not collapse summary to a generic activity noun like '식사', '회의', '약속', '방문' unless the transcript itself is that generic. "
+        "When date or time can be structured into the date/time fields, do not duplicate that information in summary. "
+        "Remove standalone date/time expressions such as '내일', '다음 주', '3시', '15:30' from summary unless the user explicitly states them as part of the title itself. "
+        "Remove only request boilerplate such as '기록해줘', '추가해줘', '등록해줘'. "
         "labels are optional search-assist tags, return 0..5 items. "
         "Prefer concise reusable labels; avoid creating too many specific one-off labels. "
+        "Do not invent labels that are not grounded in the transcript. "
+        "If the transcript does not clearly supply label text, return an empty labels array. "
         "Example input: '내일 9시 회의'. "
-        "Example output: {'mode':'input','intent':'create','date':'2026-02-11','summary':'회의','time':'09:00','repeatYearly':null,"
-        "'categoryId':'work','placeText':'','body':'내일 9시 회의','labels':['팀'],'missingRequired':[]}."
+        'Example output: {"mode":"input","intent":"create","date":"2026-02-11","summary":"회의","time":"09:00","repeatYearly":null,'
+        '"categoryId":"work","placeText":"","body":"내일 9시 회의","labels":[],"missingRequired":[]}.'
     )
     user = json.dumps(
         {
@@ -72,8 +80,8 @@ def search_prompts(transcript: str) -> tuple[str, str]:
         "For '여태까지/지금까지/전체/전부/모든 기록' style requests, choose strategy='all_events' so all saved events are included. "
         "For 'n일부터 m일까지' or explicit date range requests, fill dateFrom/dateTo exactly. "
         "Example input: '지난주 병원 일정 찾아줘'. "
-        "Example output: {'mode':'search','strategy':'combined','query':'병원 일정','dateFrom':'2026-02-01','dateTo':'2026-02-07','sortOrder':'desc',"
-        "'categoryIds':['medical'],'labels':[]}."
+        'Example output: {"mode":"search","strategy":"combined","query":"병원 일정","dateFrom":"2026-02-01","dateTo":"2026-02-07","sortOrder":"desc",'
+        '"categoryIds":["medical"],"labels":[]}.'
     )
     user = json.dumps(
         {
@@ -95,7 +103,7 @@ def refine_prompts(field: str, transcript: str, current_value: str, selected_dat
         "value must be non-empty. "
         "For time field, output HH:mm. "
         "Example input: field='time', transcript='3시 30분으로 바꿔줘'. "
-        "Example output: {'mode':'refine','field':'time','value':'15:30','missingRequired':[]}."
+        'Example output: {"mode":"refine","field":"time","value":"15:30","missingRequired":[]}.'
     )
     user = json.dumps(
         {
@@ -144,10 +152,10 @@ def modify_prompts(
         "Do not copy all current values; output only fields that should actually change. "
         "If transcript requests multiple changes, include all supported changes in one patch. "
         "Examples: "
-        "1) transcript='내일 회의 3시 30분으로 바꿔줘' -> {'mode':'modify','summary':null,'time':'15:30','categoryId':'work','placeText':null,'body':null,'labels':null,'missingRequired':[]} "
-        "2) transcript='장소를 강남역으로, 라벨은 #중요,#팀 으로 수정' -> {'mode':'modify','summary':null,'time':null,'categoryId':null,'placeText':'강남역','body':null,'labels':['중요','팀'],'missingRequired':[]} "
-        "3) transcript='내용 지워줘' -> {'mode':'modify','summary':null,'time':null,'categoryId':null,'placeText':null,'body':'','labels':null,'missingRequired':[]}. "
-        "4) transcript='병원 진료로 바꿔줘' -> {'mode':'modify','summary':null,'time':null,'categoryId':'medical','placeText':null,'body':null,'labels':null,'missingRequired':[]}."
+        '1) transcript="내일 회의 3시 30분으로 바꿔줘" -> {"mode":"modify","summary":null,"time":"15:30","categoryId":"work","placeText":null,"body":null,"labels":null,"missingRequired":[]} '
+        '2) transcript="장소를 강남역으로, 라벨은 #중요,#팀 으로 수정" -> {"mode":"modify","summary":null,"time":null,"categoryId":null,"placeText":"강남역","body":null,"labels":["중요","팀"],"missingRequired":[]} '
+        '3) transcript="내용 지워줘" -> {"mode":"modify","summary":null,"time":null,"categoryId":null,"placeText":null,"body":"","labels":null,"missingRequired":[]}. '
+        '4) transcript="병원 진료로 바꿔줘" -> {"mode":"modify","summary":null,"time":null,"categoryId":"medical","placeText":null,"body":null,"labels":null,"missingRequired":[]}.'
     )
     user = json.dumps(
         {
