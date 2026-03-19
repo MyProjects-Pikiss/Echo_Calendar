@@ -2,7 +2,7 @@
 
 > 자연어 입력과 AI 해석을 중심으로 만든 Android 캘린더 프로젝트
 
-[서비스 상태](https://echo-calendar.win/health) · [배포 링크](https://echo-calendar.win) · [apk 링크] (https://echo-calendar.win/downloads/echo_calendar.apk)
+[서비스 상태](https://echo-calendar.win/health) · [배포 링크](https://echo-calendar.win) · [apk 링크](https://echo-calendar.win/downloads/echo_calendar.apk)
 
 Echo Calendar는 일정을 항목별로 하나씩 입력하기보다, 텍스트나 음성으로 빠르게 기록하고 다시 쉽게 찾을 수 있도록 만든 캘린더 앱입니다.  
 AI 연동을 기본 사용 흐름으로 두고 있으며, 일정 데이터는 Android 앱의 로컬 DB에 저장됩니다.  
