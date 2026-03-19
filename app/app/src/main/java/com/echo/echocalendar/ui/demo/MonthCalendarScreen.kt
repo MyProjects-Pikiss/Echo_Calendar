@@ -99,6 +99,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
+import com.echo.echocalendar.SecureSettings
 import com.echo.echocalendar.SettingsKeys
 import com.echo.echocalendar.data.local.CategoryDefaults
 import com.echo.echocalendar.domain.usecase.MAX_LABELS_PER_EVENT
@@ -164,7 +165,7 @@ fun MonthCalendarScreen(
 
     val context = LocalContext.current
     val settingsPrefs = remember(context) {
-        context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+        SecureSettings.getPreferences(context)
     }
     var alarmAlertMode by remember {
         mutableStateOf(

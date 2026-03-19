@@ -5,6 +5,7 @@ from app.usage_store import (
     authenticate_user,
     create_user,
     create_session,
+    delete_session,
     ensure_admin_user,
     get_user_by_session,
     init_usage_db,
@@ -19,6 +20,16 @@ def _fetch_user_roles(db_path: Path) -> dict[str, str]:
     try:
         rows = conn.execute("SELECT username, role FROM users").fetchall()
         return {str(row["username"]): str(row["role"]) for row in rows}
+    finally:
+        conn.close()
+
+
+def _fetch_session_tokens(db_path: Path) -> list[str]:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT token FROM sessions").fetchall()
+        return [str(row["token"]) for row in rows]
     finally:
         conn.close()
 
@@ -98,3 +109,28 @@ def test_usage_user_detail_includes_client_ip(tmp_path):
 
     assert len(detail["events"]) == 1
     assert detail["events"][0]["clientIp"] == "203.0.113.10"
+
+
+def test_create_session_stores_only_hashed_token(tmp_path):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="viewer", password="pw-user", role="user")
+
+    token = create_session(db_path, user["id"])
+    stored_tokens = _fetch_session_tokens(db_path)
+
+    assert len(stored_tokens) == 1
+    assert stored_tokens[0] != token
+    assert len(stored_tokens[0]) == 64
+    assert get_user_by_session(db_path, token) is not None
+
+
+def test_delete_session_removes_hashed_session(tmp_path):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="viewer", password="pw-user", role="user")
+    token = create_session(db_path, user["id"])
+
+    delete_session(db_path, token)
+
+    assert get_user_by_session(db_path, token) is None

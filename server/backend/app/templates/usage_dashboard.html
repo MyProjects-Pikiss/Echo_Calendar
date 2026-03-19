@@ -314,6 +314,7 @@
         <button id="loginBtn">로그인</button>
         <button id="signupBtn" class="secondary">회원가입</button>
         <button id="refreshBtn" class="secondary">새로고침</button>
+        <button id="logoutBtn" class="secondary">로그아웃</button>
       </div>
       <div class="status" id="authStatus">로그인 필요</div>
     </section>
@@ -435,7 +436,6 @@
 
   <script>
     const state = {
-      token: localStorage.getItem("echo_usage_token") || "",
       users: [],
       authenticated: false,
       detailEvents: [],
@@ -460,7 +460,7 @@
 
     async function api(path) {
       const res = await fetch(path, {
-        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+        credentials: "same-origin",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -473,11 +473,9 @@
       const headers = {
         "Content-Type": "application/json",
       };
-      if (state.token) {
-        headers.Authorization = `Bearer ${state.token}`;
-      }
       const res = await fetch(path, {
         method,
+        credentials: "same-origin",
         headers,
         body: JSON.stringify(body || {}),
       });
@@ -534,17 +532,11 @@
     }
 
     async function ensureAuthenticated() {
-      if (!state.token) {
-        lockDashboard("로그인 필요");
-        return false;
-      }
       try {
         const data = await api("/auth/me");
         unlockDashboard(`인증 성공: ${data.user?.username || "unknown"}`);
         return true;
       } catch (err) {
-        state.token = "";
-        localStorage.removeItem("echo_usage_token");
         lockDashboard(`인증 실패: ${err.message}`);
         return false;
       }
@@ -880,10 +872,9 @@
     }
 
     async function fetchUserDelete(userId) {
-      const headers = state.token ? { Authorization: `Bearer ${state.token}` } : {};
       const res = await fetch(`/usage/users/${encodeURIComponent(userId)}`, {
         method: "DELETE",
-        headers,
+        credentials: "same-origin",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -909,6 +900,7 @@
       try {
         const res = await fetch(path, {
           method: "POST",
+          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
         });
@@ -916,14 +908,23 @@
         if (!res.ok) {
           throw new Error(data.message || `HTTP ${res.status}`);
         }
-        state.token = data.accessToken || "";
-        localStorage.setItem("echo_usage_token", state.token);
         const ok = await ensureAuthenticated();
         if (ok) {
           await reloadAll();
         }
       } catch (err) {
         lockDashboard(`인증 실패: ${err.message}`);
+      }
+    }
+
+    async function logout() {
+      try {
+        await fetch("/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+      } finally {
+        lockDashboard("로그아웃됨");
       }
     }
 
@@ -969,6 +970,9 @@
 
     byId("loginBtn").addEventListener("click", async () => { await loginOrSignup("/auth/login"); });
     byId("signupBtn").addEventListener("click", async () => { await loginOrSignup("/auth/signup"); });
+    byId("logoutBtn").addEventListener("click", async () => {
+      await logout();
+    });
     byId("refreshBtn").addEventListener("click", async () => {
       if (!state.authenticated) return;
       await reloadAll();
@@ -1029,14 +1033,12 @@
     setupLlmInteractions();
 
     setDashboardVisible(false);
-    if (state.token) {
-      setStatus("authStatus", "저장된 토큰으로 인증 확인 중...");
-      ensureAuthenticated().then((ok) => {
-        if (ok) {
-          reloadAll();
-        }
-      });
-    }
+    setStatus("authStatus", "인증 상태 확인 중...");
+    ensureAuthenticated().then((ok) => {
+      if (ok) {
+        reloadAll();
+      }
+    });
   </script>
 </body>
 </html>

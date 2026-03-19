@@ -1,7 +1,8 @@
 package com.echo.echocalendar
 
 object SettingsKeys {
-    const val SETTINGS_PREFS_NAME = "app_settings"
+    const val LEGACY_SETTINGS_PREFS_NAME = "app_settings"
+    const val SETTINGS_PREFS_NAME = "app_settings_secure"
 
     const val KEY_AUTO_DEFAULT_TIME_ENABLED = "auto_default_time_enabled"
     const val KEY_AUTO_DEFAULT_TIME_TEXT = "auto_default_time_text"

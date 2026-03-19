@@ -1,59 +1,38 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-
-# Local secrets
-.env
-.env.*
+# Secrets and local env files
 *.env
-!server/SERVER_ENV_TEMPLATE.env
-!server/docker.defaults.env
-!app/APP_SIGNING_TEMPLATE.env
+*.env.local
+*.secret
+*.secrets
 
-# Local tooling artifacts
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Python cache
+__pycache__/
+.pytest_cache/
+.venv/
+
+# Android/Gradle local artifacts
+.gradle/
 .gradle-local/
-tools/__pycache__/
-
-# Local IDE state (nested Android project)
+.idea/
+app/.gradle/
 app/.idea/
-
-# Local runtime/config artifacts (do not commit)
-server/logs/
-server/backend/data/
-
-# Local virtualenvs
-server/backend/.venv/
-server/backend/.venv-linux/
-
-# Python cache under server tools
-server/tools/__pycache__/
-server/tools/**/*.pyc
-
-# APK build artifacts for server-side distribution
-server/downloads/*.apk
-!server/downloads/.gitkeep
-
-# Android app build outputs
-app/**/build/
+app/build/
+app/app/build/
 app/app/release/
 app/app/debug/
+app/local.properties
 *.apk
 *.aab
-
-# Android signing key files
-*.jks
 *.keystore
-keystore.properties
-app/keystore.properties
+*.jks
+
+# Runtime data and generated downloads
+server/data/
+server/backend/data/
+server/downloads/*
+!server/downloads/.gitkeep

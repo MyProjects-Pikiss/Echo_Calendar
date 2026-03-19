@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val prefs = remember(context) {
-                context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+                SecureSettings.getPreferences(context)
             }
             var themeMode by remember {
                 mutableStateOf(

@@ -80,6 +80,7 @@ def init_usage_db(db_path: Path) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_user_created ON usage_events(user_id, created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_events(created_at)")
+        _migrate_plaintext_sessions(conn)
 
 
 def create_user(db_path: Path, username: str, password: str, role: str = "user") -> dict[str, Any]:
@@ -121,24 +122,27 @@ def authenticate_user(db_path: Path, username: str, password: str) -> dict[str, 
 def create_session(db_path: Path, user_id: str) -> str:
     now = int(time.time() * 1000)
     token = secrets.token_urlsafe(32)
+    token_hash = _hash_session_token(token)
     with _connect(db_path) as conn:
         conn.execute(
             "INSERT INTO sessions(token, user_id, created_at) VALUES (?, ?, ?)",
-            (token, user_id, now),
+            (token_hash, user_id, now),
         )
     return token
 
 
 def get_user_by_session(db_path: Path, token: str) -> dict[str, Any] | None:
+    token_hash = _hash_session_token(token)
     with _connect(db_path) as conn:
         row = conn.execute(
             """
             SELECT u.id, u.username, u.role, u.created_at
             FROM sessions s
             JOIN users u ON u.id = s.user_id
-            WHERE s.token = ?
+            WHERE s.token IN (?, ?)
+            ORDER BY CASE WHEN s.token = ? THEN 0 ELSE 1 END
             """,
-            (token,),
+            (token_hash, token, token_hash),
         ).fetchone()
     if row is None:
         return None
@@ -148,6 +152,15 @@ def get_user_by_session(db_path: Path, token: str) -> dict[str, Any] | None:
         "role": str(row["role"] or "user"),
         "createdAt": int(row["created_at"]),
     }
+
+
+def delete_session(db_path: Path, token: str) -> None:
+    token_hash = _hash_session_token(token)
+    with _connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM sessions WHERE token IN (?, ?)",
+            (token_hash, token),
+        )
 
 
 def ensure_admin_user(db_path: Path, username: str, password: str) -> dict[str, Any]:
@@ -436,6 +449,27 @@ def _verify_password(password: str, stored_hash: str) -> bool:
     salt, expected = parts
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000)
     return secrets.compare_digest(digest.hex(), expected)
+
+
+def _hash_session_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _is_sha256_hex(value: str) -> bool:
+    stripped = value.strip().lower()
+    return len(stripped) == 64 and all(char in "0123456789abcdef" for char in stripped)
+
+
+def _migrate_plaintext_sessions(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("SELECT token FROM sessions").fetchall()
+    for row in rows:
+        raw_token = str(row["token"] or "")
+        if not raw_token or _is_sha256_hex(raw_token):
+            continue
+        conn.execute(
+            "UPDATE sessions SET token = ? WHERE token = ?",
+            (_hash_session_token(raw_token), raw_token),
+        )
 
 
 def _ensure_users_role_column(conn: sqlite3.Connection) -> None:

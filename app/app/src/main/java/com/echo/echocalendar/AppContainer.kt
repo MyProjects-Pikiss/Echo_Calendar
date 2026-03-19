@@ -25,10 +25,7 @@ import com.echo.echocalendar.ui.demo.HttpAiApiGateway
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
-    private val settingsPrefs = appContext.getSharedPreferences(
-        SettingsKeys.SETTINGS_PREFS_NAME,
-        Context.MODE_PRIVATE
-    )
+    private val settingsPrefs = SecureSettings.getPreferences(appContext)
 
     val database: AppDatabase = Room.databaseBuilder(
         appContext,

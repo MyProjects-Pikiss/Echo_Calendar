@@ -50,6 +50,7 @@ from .usage_store import (
     authenticate_user,
     create_session,
     create_user,
+    delete_session,
     delete_user,
     ensure_admin_user,
     get_user_by_session,
@@ -77,6 +78,7 @@ _usage_event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue(maxsize
 usage_kafka_producer = KafkaUsageProducer()
 app.mount("/downloads", StaticFiles(directory=str(downloads_dir), check_dir=False), name="downloads")
 runtime_version_file_path = downloads_dir / "app_version.env"
+SESSION_COOKIE_NAME = "echo_usage_session"
 
 
 def _is_path_enabled(path: str) -> bool:
@@ -148,7 +150,7 @@ async def _ai_auth_middleware(request: Request, call_next):
         return await call_next(request)
     if _auth_user_from_request(request) is not None:
         return await call_next(request)
-    return stable_error("auth", "UNAUTHORIZED", "valid bearer token is required", status=401)
+    return stable_error("auth", "UNAUTHORIZED", "valid session is required", status=401)
 
 
 def stable_error(mode: str, error_code: str, message: str, status: int = 400) -> JSONResponse:
@@ -202,11 +204,48 @@ def _extract_bearer_token(request: Request) -> str | None:
     return token if token else None
 
 
+def _extract_session_cookie(request: Request) -> str | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME, "").strip()
+    return token if token else None
+
+
+def _extract_auth_token(request: Request) -> str | None:
+    return _extract_bearer_token(request) or _extract_session_cookie(request)
+
+
 def _auth_user_from_request(request: Request) -> dict[str, Any] | None:
-    token = _extract_bearer_token(request)
+    token = _extract_auth_token(request)
     if not token:
         return None
     return get_user_by_session(usage_db_path, token)
+
+
+def _is_secure_request(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    if forwarded_proto:
+        return forwarded_proto == "https"
+    return request.url.scheme.lower() == "https"
+
+
+def _set_session_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=_is_secure_request(request),
+        samesite="lax",
+        path="/",
+        max_age=60 * 60 * 24 * 30,
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def _resolve_usage_user_id(request: Request, payload_user_id: str | None) -> str | None:
@@ -225,7 +264,7 @@ def _resolve_usage_user_id(request: Request, payload_user_id: str | None) -> str
 def _require_usage_admin(request: Request) -> tuple[dict[str, Any] | None, JSONResponse | None]:
     user = _auth_user_from_request(request)
     if user is None:
-        return None, stable_error("usage", "UNAUTHORIZED", "valid bearer token is required", status=401)
+        return None, stable_error("usage", "UNAUTHORIZED", "valid session is required", status=401)
     if str(user.get("role", "")).strip().lower() == "admin":
         return user, None
     owner = settings.usage_dashboard_owner_username.strip()
@@ -439,13 +478,16 @@ async def auth_signup(request: Request) -> JSONResponse:
     except sqlite3.IntegrityError:
         return stable_error("auth", "USERNAME_EXISTS", "username already exists", status=409)
     token = create_session(usage_db_path, user["id"])
-    return JSONResponse(
+    response = JSONResponse(
         status_code=200,
         content={
             "user": user,
             "accessToken": token,
         },
     )
+    _set_session_cookie(response, request, token)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.post("/auth/login")
@@ -467,21 +509,37 @@ async def auth_login(request: Request) -> JSONResponse:
     if user is None:
         return stable_error("auth", "AUTH_FAILED", "invalid username or password", status=401)
     token = create_session(usage_db_path, user["id"])
-    return JSONResponse(
+    response = JSONResponse(
         status_code=200,
         content={
             "user": user,
             "accessToken": token,
         },
     )
+    _set_session_cookie(response, request, token)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/auth/logout")
+async def auth_logout(request: Request) -> JSONResponse:
+    token = _extract_auth_token(request)
+    if token:
+        delete_session(usage_db_path, token)
+    response = JSONResponse(status_code=200, content={"ok": True})
+    _clear_session_cookie(response)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/auth/me")
 async def auth_me(request: Request) -> JSONResponse:
     user = _auth_user_from_request(request)
     if user is None:
-        return stable_error("auth", "UNAUTHORIZED", "valid bearer token is required", status=401)
-    return JSONResponse(status_code=200, content={"user": user})
+        return stable_error("auth", "UNAUTHORIZED", "valid session is required", status=401)
+    response = JSONResponse(status_code=200, content={"user": user})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/usage/overview")
@@ -505,7 +563,7 @@ async def usage_user_detail_api(request: Request, userId: str | None = None, lim
 async def usage_me_api(request: Request, limit: int = 100) -> JSONResponse:
     user = _auth_user_from_request(request)
     if user is None:
-        return stable_error("usage", "UNAUTHORIZED", "valid bearer token is required", status=401)
+        return stable_error("usage", "UNAUTHORIZED", "valid session is required", status=401)
     safe_limit = max(1, min(limit, 500))
     return JSONResponse(
         status_code=200,
@@ -575,15 +633,12 @@ async def usage_users_delete_api(request: Request, user_id: str) -> JSONResponse
 
 @app.get("/usage/dashboard")
 async def usage_dashboard(request: Request):
-    required_key = settings.usage_dashboard_access_key.strip()
-    if required_key:
-        access_key = request.query_params.get("key", "").strip()
-        if access_key != required_key:
-            return stable_error("usage", "FORBIDDEN", "invalid dashboard access key", status=403)
     if not dashboard_html_path.exists():
         return stable_error("usage", "NOT_FOUND", "dashboard template missing", status=500)
     html = dashboard_html_path.read_text(encoding="utf-8")
-    return HTMLResponse(content=html, status_code=200)
+    response = HTMLResponse(content=html, status_code=200)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/holidays")

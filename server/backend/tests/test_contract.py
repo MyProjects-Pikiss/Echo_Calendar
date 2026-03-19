@@ -120,3 +120,45 @@ def test_modify_success_includes_patch_fields(auth_headers: dict[str, str]):
     data = response.json()
     assert data["mode"] == "modify"
     assert "time" in data
+
+
+def test_login_sets_http_only_session_cookie(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    create_user(db_path, username="cookie_user", password="pw-1234")
+    monkeypatch.setattr(main_module, "usage_db_path", db_path)
+
+    response = client.post("/auth/login", json={"username": "cookie_user", "password": "pw-1234"})
+
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "echo_usage_session=" in set_cookie
+    assert "HttpOnly" in set_cookie
+
+
+def test_auth_me_accepts_session_cookie(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="cookie_user", password="pw-1234")
+    token = create_session(db_path, user["id"])
+    monkeypatch.setattr(main_module, "usage_db_path", db_path)
+
+    response = client.get("/auth/me", cookies={"echo_usage_session": token})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user"]["username"] == "cookie_user"
+
+
+def test_logout_clears_cookie_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    db_path = tmp_path / "usage.db"
+    init_usage_db(db_path)
+    user = create_user(db_path, username="cookie_user", password="pw-1234")
+    token = create_session(db_path, user["id"])
+    monkeypatch.setattr(main_module, "usage_db_path", db_path)
+
+    response = client.post("/auth/logout", cookies={"echo_usage_session": token})
+
+    assert response.status_code == 200
+    assert get_user_by_session(db_path, token) is None
+    assert "echo_usage_session=" in response.headers.get("set-cookie", "")

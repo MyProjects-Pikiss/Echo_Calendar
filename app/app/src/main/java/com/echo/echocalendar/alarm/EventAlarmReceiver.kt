@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.echo.echocalendar.MainActivity
 import com.echo.echocalendar.R
+import com.echo.echocalendar.SecureSettings
 import com.echo.echocalendar.SettingsKeys
 
 class EventAlarmReceiver : BroadcastReceiver() {
@@ -76,7 +77,7 @@ class EventAlarmReceiver : BroadcastReceiver() {
     }
 
     private fun resolveAlarmMode(context: Context): String {
-        val prefs = context.getSharedPreferences(SettingsKeys.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = SecureSettings.getPreferences(context)
         return prefs.getString(
             SettingsKeys.KEY_ALARM_ALERT_MODE,
             SettingsKeys.ALARM_ALERT_MODE_SOUND
