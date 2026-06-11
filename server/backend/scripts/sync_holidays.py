@@ -146,7 +146,7 @@ def main() -> int:
     parser.add_argument(
         "--today-window-years",
         type=int,
-        help="Sync range [today-years, today+years], e.g. 5 => today±5y",
+        help="Sync range [today-years, today+years], e.g. 5 => today +/- 5y",
     )
     parser.add_argument(
         "--chunk-months",

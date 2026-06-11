@@ -27,12 +27,19 @@ services:
       - kafka
     env_file:
       - ./docker.defaults.env
+      - ${BACKEND_EXTERNAL_ENV_PATH:?set BACKEND_EXTERNAL_ENV_PATH in server/.env}
     ports:
       - "8088:8088"
     volumes:
-      - ./backend/data:/app/data
-      - ./downloads:/app/downloads
-      - ./logs:/app/logs
+      - type: bind
+        source: ${BACKEND_DATA_DIR:?set BACKEND_DATA_DIR in server/.env}
+        target: /app/data
+      - type: bind
+        source: ${BACKEND_DOWNLOADS_DIR:?set BACKEND_DOWNLOADS_DIR in server/.env}
+        target: /app/downloads
+      - type: bind
+        source: ${BACKEND_LOGS_DIR:?set BACKEND_LOGS_DIR in server/.env}
+        target: /app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
       interval: 30s
@@ -53,9 +60,33 @@ services:
       - scripts/consume_usage_events.py
     env_file:
       - ./docker.defaults.env
+      - ${BACKEND_EXTERNAL_ENV_PATH:?set BACKEND_EXTERNAL_ENV_PATH in server/.env}
     volumes:
-      - ./backend/data:/app/data
-      - ./logs:/app/logs
+      - type: bind
+        source: ${BACKEND_DATA_DIR:?set BACKEND_DATA_DIR in server/.env}
+        target: /app/data
+      - type: bind
+        source: ${BACKEND_LOGS_DIR:?set BACKEND_LOGS_DIR in server/.env}
+        target: /app/logs
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: echo-calendar-cloudflared
+    profiles:
+      - tunnel
+    depends_on:
+      - backend
+    command:
+      - tunnel
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+    volumes:
+      - type: bind
+        source: ${CLOUDFLARED_DIR:?set CLOUDFLARED_DIR in server/.env}
+        target: /etc/cloudflared
+        read_only: true
     restart: unless-stopped
 
 volumes:

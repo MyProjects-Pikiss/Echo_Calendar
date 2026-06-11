@@ -3,6 +3,7 @@
 *.env.local
 *.secret
 *.secrets
+!config/echo-calendar.config.env
 
 # Local databases and logs
 *.db
@@ -34,5 +35,5 @@ app/local.properties
 # Runtime data and generated downloads
 server/data/
 server/backend/data/
-server/downloads/*
-!server/downloads/.gitkeep
+server/downloads/
+server/logs/

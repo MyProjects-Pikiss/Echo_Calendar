@@ -2,7 +2,7 @@
 """Validate Echo Calendar AI backend contract endpoints.
 
 Usage:
-  python tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
+  python server/tools/check_ai_backend_contract.py --base-url http://127.0.0.1:8088
 """
 
 from __future__ import annotations

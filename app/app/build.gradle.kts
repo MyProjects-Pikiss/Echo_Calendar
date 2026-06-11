@@ -8,13 +8,24 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-fun Project.stringProperty(name: String, defaultValue: String = ""): String {
+fun Project.stringProperty(
+    name: String,
+    defaultValue: String = "",
+    configValues: Map<String, String> = emptyMap()
+): String {
     val value = findProperty(name)?.toString()?.trim()
-    return if (value.isNullOrEmpty()) defaultValue else value
+    if (!value.isNullOrEmpty()) return value
+    val configValue = configValues[name]?.trim()
+    return if (configValue.isNullOrEmpty()) defaultValue else configValue
 }
 
-fun Project.booleanProperty(name: String, defaultValue: Boolean): Boolean {
+fun Project.booleanProperty(
+    name: String,
+    defaultValue: Boolean,
+    configValues: Map<String, String> = emptyMap()
+): Boolean {
     val rawValue = findProperty(name)?.toString()?.trim()?.lowercase()
+        ?: configValues[name]?.trim()?.lowercase()
     return when (rawValue) {
         "true", "1", "yes", "y", "on" -> true
         "false", "0", "no", "n", "off" -> false
@@ -127,12 +138,12 @@ android {
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("int", "AI_API_TIMEOUT_MS", project.stringProperty("AI_API_TIMEOUT_MS", "30000"))
-        buildConfigField("int", "HOLIDAY_SYNC_TIMEOUT_MS", project.stringProperty("HOLIDAY_SYNC_TIMEOUT_MS", "5000"))
+        buildConfigField("int", "AI_API_TIMEOUT_MS", project.stringProperty("AI_API_TIMEOUT_MS", "30000", appClientConfig))
+        buildConfigField("int", "HOLIDAY_SYNC_TIMEOUT_MS", project.stringProperty("HOLIDAY_SYNC_TIMEOUT_MS", "5000", appClientConfig))
         buildConfigField(
             "boolean",
             "ALLOW_SIGNUP",
-            project.booleanProperty("ALLOW_SIGNUP", false).toString()
+            project.booleanProperty("ALLOW_SIGNUP", false, appClientConfig).toString()
         )
     }
 
@@ -155,30 +166,36 @@ android {
                 "AI_API_BASE_URL",
                 project.stringProperty(
                     "AI_API_BASE_URL_DEBUG",
-                    project.stringProperty("AI_API_BASE_URL", defaultAiApiBaseUrl)
+                    project.stringProperty("AI_API_BASE_URL", defaultAiApiBaseUrl, appClientConfig),
+                    appClientConfig
                 ).asBuildConfigString()
             )
             buildConfigField(
                 "String",
                 "AI_API_KEY",
-                project.stringProperty("AI_API_KEY_DEBUG", project.stringProperty("AI_API_KEY")).asBuildConfigString()
+                project.stringProperty(
+                    "AI_API_KEY_DEBUG",
+                    project.stringProperty("AI_API_KEY", configValues = appClientConfig),
+                    appClientConfig
+                ).asBuildConfigString()
             )
             buildConfigField(
                 "boolean",
                 "AI_SEND_CLIENT_API_KEY",
-                project.booleanProperty("AI_SEND_CLIENT_API_KEY_DEBUG", false).toString()
+                project.booleanProperty("AI_SEND_CLIENT_API_KEY_DEBUG", false, appClientConfig).toString()
             )
             buildConfigField(
                 "boolean",
                 "AI_REQUIRE_HTTPS",
-                project.booleanProperty("AI_REQUIRE_HTTPS_DEBUG", false).toString()
+                project.booleanProperty("AI_REQUIRE_HTTPS_DEBUG", false, appClientConfig).toString()
             )
             buildConfigField(
                 "String",
                 "HOLIDAY_SYNC_URL",
                 project.stringProperty(
                     "HOLIDAY_SYNC_URL_DEBUG",
-                    project.stringProperty("HOLIDAY_SYNC_URL", defaultHolidaySyncUrl)
+                    project.stringProperty("HOLIDAY_SYNC_URL", defaultHolidaySyncUrl, appClientConfig),
+                    appClientConfig
                 ).asBuildConfigString()
             )
         }
@@ -193,30 +210,36 @@ android {
                 "AI_API_BASE_URL",
                 project.stringProperty(
                     "AI_API_BASE_URL_RELEASE",
-                    project.stringProperty("AI_API_BASE_URL", defaultAiApiBaseUrl)
+                    project.stringProperty("AI_API_BASE_URL", defaultAiApiBaseUrl, appClientConfig),
+                    appClientConfig
                 ).asBuildConfigString()
             )
             buildConfigField(
                 "String",
                 "AI_API_KEY",
-                project.stringProperty("AI_API_KEY_RELEASE", project.stringProperty("AI_API_KEY")).asBuildConfigString()
+                project.stringProperty(
+                    "AI_API_KEY_RELEASE",
+                    project.stringProperty("AI_API_KEY", configValues = appClientConfig),
+                    appClientConfig
+                ).asBuildConfigString()
             )
             buildConfigField(
                 "boolean",
                 "AI_SEND_CLIENT_API_KEY",
-                project.booleanProperty("AI_SEND_CLIENT_API_KEY_RELEASE", false).toString()
+                project.booleanProperty("AI_SEND_CLIENT_API_KEY_RELEASE", false, appClientConfig).toString()
             )
             buildConfigField(
                 "boolean",
                 "AI_REQUIRE_HTTPS",
-                project.booleanProperty("AI_REQUIRE_HTTPS_RELEASE", true).toString()
+                project.booleanProperty("AI_REQUIRE_HTTPS_RELEASE", true, appClientConfig).toString()
             )
             buildConfigField(
                 "String",
                 "HOLIDAY_SYNC_URL",
                 project.stringProperty(
                     "HOLIDAY_SYNC_URL_RELEASE",
-                    project.stringProperty("HOLIDAY_SYNC_URL", defaultHolidaySyncUrl)
+                    project.stringProperty("HOLIDAY_SYNC_URL", defaultHolidaySyncUrl, appClientConfig),
+                    appClientConfig
                 ).asBuildConfigString()
             )
             proguardFiles(
