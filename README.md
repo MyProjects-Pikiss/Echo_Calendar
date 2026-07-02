@@ -8,8 +8,8 @@ Echo Calendar는 텍스트나 음성으로 일정을 빠르게 기록하고, 로
 
 ## 주요 기능
 
-- Android 앱: 월간 캘린더, 일정 생성/수정/삭제, 연간 반복 일정, 로컬 알림, Room FTS 검색
-- AI 연동: 자연어 일정 입력/검색/수정/삭제 해석, 사용자 확인 후 반영
+- Android 앱: 월간 캘린더, 일정 생성/수정/삭제, 라벨 관리, 연간 반복 일정, 로컬 알림, Room FTS 검색
+- AI 연동: 자연어 일정 입력/검색/수정/삭제 해석, 기존 라벨 목록 기반 라벨 추천, 사용자 확인 후 반영
 - 서버: 인증, OpenAI 연동, 공휴일 캐시, 사용량 집계, 앱 버전 확인, APK 다운로드
 - 운영: Docker Compose, Cloudflare Tunnel, Kafka usage consumer
 

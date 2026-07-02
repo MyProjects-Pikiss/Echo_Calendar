@@ -17,5 +17,10 @@ object SettingsKeys {
     const val THEME_MODE_LIGHT = "light"
     const val THEME_MODE_DARK = "dark"
 
+    const val KEY_AI_LABEL_MODE = "ai_label_mode"
+    const val AI_LABEL_MODE_OFF = "off"
+    const val AI_LABEL_MODE_SUGGEST = "suggest"
+    const val AI_LABEL_MODE_AUTO = "auto"
+
     const val KEY_USAGE_ACCESS_TOKEN = "usage_access_token"
 }

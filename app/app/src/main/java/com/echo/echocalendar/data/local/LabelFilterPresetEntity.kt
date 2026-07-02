@@ -4,16 +4,17 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-const val LABEL_SOURCE_AI = "ai"
-const val LABEL_SOURCE_USER = "user"
+const val LABEL_FILTER_INCLUDE_MODE_ALL = "all"
+const val LABEL_FILTER_INCLUDE_MODE_ANY = "any"
 
 @Entity(
-    tableName = "Label",
+    tableName = "LabelFilterPreset",
     indices = [Index(value = ["name"], unique = true)]
 )
-data class LabelEntity(
+data class LabelFilterPresetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    val includeMode: String = LABEL_FILTER_INCLUDE_MODE_ANY,
     val createdAt: Long,
-    val source: String = LABEL_SOURCE_USER
+    val updatedAt: Long
 )

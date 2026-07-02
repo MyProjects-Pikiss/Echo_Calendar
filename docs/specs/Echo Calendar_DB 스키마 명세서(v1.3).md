@@ -59,6 +59,10 @@ LABEL UPSERT RULE (운영 규칙):
 - Label.name 기준으로 조회
   - 존재하면 해당 Label 재사용
   - 없으면 새 Label 생성 후 사용
+- Label.name은 사용자가 관리할 수 있음
+  - 이름 변경: 동일 Label.id 유지, 연결 이벤트에는 새 이름으로 표시
+  - 삭제: Label 삭제, EventLabel FK cascade로 연결 제거
+  - 병합: 원본 라벨의 EventLabel 연결을 대상 라벨로 복사 후 원본 Label 삭제
 
 ==================================================
 4) EventLabel (Many-to-Many)

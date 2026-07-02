@@ -10,6 +10,8 @@ import com.echo.echocalendar.data.local.MIGRATION_5_6
 import com.echo.echocalendar.data.local.MIGRATION_6_7
 import com.echo.echocalendar.data.local.MIGRATION_7_8
 import com.echo.echocalendar.data.local.MIGRATION_8_9
+import com.echo.echocalendar.data.local.MIGRATION_9_10
+import com.echo.echocalendar.data.local.MIGRATION_10_11
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetAllEventsUseCase
 import com.echo.echocalendar.domain.usecase.GetEventsByDateUseCase
@@ -31,7 +33,16 @@ class AppContainer(context: Context) {
         appContext,
         AppDatabase::class.java,
         "echo_calendar.db"
-    ).addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+    ).addMigrations(
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+        MIGRATION_9_10,
+        MIGRATION_10_11
+    )
         .build()
 
     val eventAlarmScheduler: EventAlarmScheduler = EventAlarmScheduler(appContext)

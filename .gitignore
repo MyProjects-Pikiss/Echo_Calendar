@@ -21,6 +21,7 @@ __pycache__/
 .gradle-local/
 .idea/
 app/.gradle/
+app/.gradle-home/
 app/.idea/
 app/build/
 app/app/build/

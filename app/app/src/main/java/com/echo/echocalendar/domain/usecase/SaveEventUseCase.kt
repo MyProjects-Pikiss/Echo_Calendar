@@ -5,6 +5,8 @@ import com.echo.echocalendar.data.local.AppDatabase
 import com.echo.echocalendar.data.local.EventEntity
 import com.echo.echocalendar.data.local.EventFtsEntity
 import com.echo.echocalendar.data.local.EventLabelCrossRef
+import com.echo.echocalendar.data.local.LABEL_SOURCE_AI
+import com.echo.echocalendar.data.local.LABEL_SOURCE_USER
 import java.util.UUID
 
 class SaveEventUseCase(
@@ -17,7 +19,8 @@ class SaveEventUseCase(
         summary: String,
         body: String,
         placeText: String?,
-        labels: List<String>
+        labels: List<String>,
+        labelsCreatedByAi: Boolean = false
     ): String {
         val eventId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -52,7 +55,11 @@ class SaveEventUseCase(
             )
             resolvedLabels
                 .forEach { labelName ->
-                    val label = labelDao.getOrCreate(labelName, now)
+                    val label = labelDao.getOrCreate(
+                        name = labelName,
+                        createdAt = now,
+                        source = if (labelsCreatedByAi) LABEL_SOURCE_AI else LABEL_SOURCE_USER
+                    )
                     eventLabelDao.insert(
                         EventLabelCrossRef(
                             eventId = eventId,

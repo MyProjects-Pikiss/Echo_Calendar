@@ -17,6 +17,7 @@ class InputInterpretRequest(BaseModel):
     transcript: str = Field(min_length=1)
     selectedDate: str
     userId: str | None = None
+    availableLabels: list[str] = []
 
     @field_validator("selectedDate")
     @classmethod
@@ -55,6 +56,7 @@ class SearchInterpretRequest(BaseModel):
     mode: AiMode
     transcript: str = Field(min_length=1)
     userId: str | None = None
+    availableLabels: list[str] = []
 
 
 class SearchInterpretResponse(BaseModel):
@@ -117,6 +119,7 @@ class ModifyInterpretRequest(BaseModel):
     currentPlaceText: str = ""
     currentBody: str = ""
     currentLabels: list[str] = []
+    availableLabels: list[str] = []
 
     @field_validator("selectedDate")
     @classmethod

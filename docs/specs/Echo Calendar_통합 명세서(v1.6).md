@@ -53,6 +53,7 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 ### 3.2 검색
 
 - 로컬 FTS 기반 검색
+- 라벨 필터 기반 검색
 - 검색 결과 선택 시 해당 날짜로 이동
 - AI 검색 시 해석 결과를 즉시 필터에 반영해 목록 조회까지 수행
 
@@ -76,6 +77,14 @@ Echo Calendar는 개인 일정을 안정적으로 기록하고 다시 찾기 위
 - 서버 `/app/version` 기준 최신 버전 확인
 - 필요 시 강제 업데이트 가능
 
+### 3.7 라벨 관리
+
+- 앱 로컬 DB의 Label 목록 조회
+- 라벨 추가/삭제/이름 변경/병합
+- 라벨별 연결 이벤트 개수 표시
+- 삭제 시 이벤트는 유지하고 해당 라벨 연결만 제거
+- AI 라벨 추천 모드: 끄기/추천만/자동 적용
+
 ---
 
 ## 4) 데이터 변경 원칙
@@ -94,6 +103,9 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.3).md` 기준.
 
 - `Label.name` 기준 조회
 - 존재하면 재사용, 없으면 신규 생성
+- 사용자는 라벨을 추가/삭제/이름 변경/병합할 수 있음
+- 라벨 삭제는 모든 이벤트에서 해당 라벨 연결을 제거하며 이벤트는 삭제하지 않음
+- 라벨 병합은 원본 라벨 연결을 대상 라벨로 이동하고 원본 라벨을 삭제함
 
 ### 5.2 Label 확장 정책
 
@@ -103,6 +115,8 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.3).md` 기준.
 - 기존으로 대체하기 어려운 경우에만 신규 생성
 - 라벨은 검색 재사용성 높은 범용 표현 지향
 - 이벤트당 라벨 수: `0..5`
+- AI 요청에는 앱 로컬 DB의 기존 라벨 이름 목록을 `availableLabels`로 전달할 수 있음
+- AI는 `availableLabels`를 우선 재사용하되, transcript에 근거한 새 라벨 추천은 허용함
 
 ### 5.3 검색 라벨 매칭 정책
 
@@ -129,7 +143,8 @@ DB 구조 자체는 `Echo Calendar_DB 스키마 명세서(v1.3).md` 기준.
 {
   "mode": "input",
   "transcript": "내일 9시 회의",
-  "selectedDate": "2026-02-11"
+  "selectedDate": "2026-02-11",
+  "availableLabels": ["팀", "병원", "배달일"]
 }
 ```
 
@@ -155,6 +170,7 @@ Input 추가 규칙:
 
 - `intent`는 `create`, `update`, `delete` 중 하나
 - `repeatYearly`는 연간 반복 제안 시 사용 가능
+- `availableLabels`는 선택 필드이며, 제공 시 labels 추천에서 기존 라벨 재사용을 우선한다.
 
 ### 6.2 Search Interpretation
 
@@ -164,7 +180,8 @@ Input 추가 규칙:
 ```json
 {
   "mode": "search",
-  "transcript": "지난주 병원 일정 찾아줘"
+  "transcript": "지난주 병원 일정 찾아줘",
+  "availableLabels": ["병원 검진", "배달일"]
 }
 ```
 
@@ -213,6 +230,7 @@ Search 응답 유효성 규칙:
 4. `label`
    - 의미: 라벨 필터 기반 조회
    - 권장 페이로드: `labels` 중심
+   - `availableLabels`와 검색 의도가 맞으면 기존 라벨명을 우선 사용
 5. `keyword`
    - 의미: 키워드(FTS) 기반 조회
    - 권장 페이로드: `query` 중심
@@ -269,7 +287,8 @@ Search 응답 유효성 규칙:
   "currentCategoryId": "work",
   "currentPlaceText": "",
   "currentBody": "내일 9시 회의",
-  "currentLabels": ["팀"]
+  "currentLabels": ["팀"],
+  "availableLabels": ["팀", "병원", "배달일"]
 }
 ```
 

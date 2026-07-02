@@ -22,15 +22,22 @@ class AiAssistantService(
         return null
     }
 
-    suspend fun suggestInput(transcript: String, selectedDate: LocalDate): AiSuggestionResult<AiInputSuggestion> {
+    suspend fun suggestInput(
+        transcript: String,
+        selectedDate: LocalDate,
+        availableLabels: List<String> = emptyList()
+    ): AiSuggestionResult<AiInputSuggestion> {
         return requestRemote("input") {
-            apiGateway.interpretInput(transcript, selectedDate)
+            apiGateway.interpretInput(transcript, selectedDate, availableLabels)
         }
     }
 
-    suspend fun suggestSearch(transcript: String): AiSuggestionResult<AiSearchSuggestion> {
+    suspend fun suggestSearch(
+        transcript: String,
+        availableLabels: List<String> = emptyList()
+    ): AiSuggestionResult<AiSearchSuggestion> {
         return requestRemote("search") {
-            apiGateway.interpretSearch(transcript)
+            apiGateway.interpretSearch(transcript, availableLabels)
         }
     }
 
@@ -54,7 +61,8 @@ class AiAssistantService(
         currentPlaceText: String,
         currentBody: String,
         currentLabelsText: String,
-        currentRawText: String?
+        currentRawText: String?,
+        availableLabels: List<String> = emptyList()
     ): AiSuggestionResult<AiModifyPatch> {
         val currentLabels = currentLabelsText.split(",")
             .map { it.trim() }
@@ -68,7 +76,8 @@ class AiAssistantService(
                 currentCategoryId = currentCategoryId,
                 currentPlaceText = currentPlaceText,
                 currentBody = currentBody,
-                currentLabels = currentLabels
+                currentLabels = currentLabels,
+                availableLabels = availableLabels
             )
         }
     }

@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -102,6 +103,12 @@ import androidx.compose.ui.window.Dialog
 import com.echo.echocalendar.SecureSettings
 import com.echo.echocalendar.SettingsKeys
 import com.echo.echocalendar.data.local.CategoryDefaults
+import com.echo.echocalendar.data.local.EventEntity
+import com.echo.echocalendar.data.local.LABEL_FILTER_INCLUDE_MODE_ALL
+import com.echo.echocalendar.data.local.LABEL_FILTER_INCLUDE_MODE_ANY
+import com.echo.echocalendar.data.local.LABEL_SOURCE_AI
+import com.echo.echocalendar.data.local.LabelFilterPresetSummary
+import com.echo.echocalendar.data.local.LabelWithEventCount
 import com.echo.echocalendar.domain.usecase.MAX_LABELS_PER_EVENT
 import java.time.DayOfWeek
 import java.time.Instant
@@ -149,6 +156,23 @@ fun MonthCalendarScreen(
     var isSearchOpen by remember { mutableStateOf(false) }
     var isSettingsOpen by remember { mutableStateOf(false) }
     var isProfileOpen by remember { mutableStateOf(false) }
+    var isLabelManagerOpen by remember { mutableStateOf(false) }
+    var newLabelText by remember { mutableStateOf("") }
+    var labelToDelete by remember { mutableStateOf<LabelWithEventCount?>(null) }
+    var labelToRename by remember { mutableStateOf<LabelWithEventCount?>(null) }
+    var renameLabelText by remember { mutableStateOf("") }
+    var labelToMerge by remember { mutableStateOf<LabelWithEventCount?>(null) }
+    var selectedLabelForEvents by remember { mutableStateOf<LabelWithEventCount?>(null) }
+    var selectedLabelFilterPreset by remember { mutableStateOf<LabelFilterPresetSummary?>(null) }
+    var labelFilterPresetToDelete by remember { mutableStateOf<LabelFilterPresetSummary?>(null) }
+    var isLabelFilterPresetEditorOpen by remember { mutableStateOf(false) }
+    var editingLabelFilterPresetId by remember { mutableStateOf<Long?>(null) }
+    var labelFilterPresetName by remember { mutableStateOf("") }
+    var labelFilterPresetIncludeMode by remember { mutableStateOf(LABEL_FILTER_INCLUDE_MODE_ANY) }
+    var labelFilterPresetIncludeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var labelFilterPresetExcludeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var mergeTargetLabelId by remember { mutableStateOf<Long?>(null) }
+    var isMergeTargetMenuOpen by remember { mutableStateOf(false) }
     var isAiSearchResultOpen by remember { mutableStateOf(false) }
     var isEventListPanelOpen by remember { mutableStateOf(false) }
     var eventListScope by remember { mutableStateOf("month") }
@@ -175,6 +199,14 @@ fun MonthCalendarScreen(
             ) ?: SettingsKeys.ALARM_ALERT_MODE_SOUND
         )
     }
+    var aiLabelMode by remember {
+        mutableStateOf(
+            settingsPrefs.getString(
+                SettingsKeys.KEY_AI_LABEL_MODE,
+                SettingsKeys.AI_LABEL_MODE_SUGGEST
+            ) ?: SettingsKeys.AI_LABEL_MODE_SUGGEST
+        )
+    }
     var usageAccessToken by remember {
         mutableStateOf(settingsPrefs.getString(SettingsKeys.KEY_USAGE_ACCESS_TOKEN, "").orEmpty())
     }
@@ -194,6 +226,18 @@ fun MonthCalendarScreen(
         null -> "음성 인식"
     }
 
+    fun availableLabelNames(): List<String> = calendarViewModel.labelStats.map { it.name }
+
+    fun openLabelFilterPresetEditor(preset: LabelFilterPresetSummary?) {
+        editingLabelFilterPresetId = preset?.preset?.id
+        labelFilterPresetName = preset?.preset?.name.orEmpty()
+        labelFilterPresetIncludeMode = preset?.preset?.includeMode ?: LABEL_FILTER_INCLUDE_MODE_ANY
+        labelFilterPresetIncludeIds = preset?.includeLabels?.map { it.id }?.toSet().orEmpty()
+        labelFilterPresetExcludeIds = preset?.excludeLabels?.map { it.id }?.toSet().orEmpty()
+        calendarViewModel.clearLabelOperationMessage()
+        isLabelFilterPresetEditorOpen = true
+    }
+
     fun handleRecognizedTranscript(transcript: String) {
         if (transcript.isBlank()) {
             aiErrorMessage = "음성을 텍스트로 변환하지 못했어요. 다시 시도해 주세요."
@@ -209,7 +253,8 @@ fun MonthCalendarScreen(
                     try {
                         val result = aiAssistantService.suggestInput(
                             transcript = transcript,
-                            selectedDate = calendarViewModel.selectedDate
+                            selectedDate = calendarViewModel.selectedDate,
+                            availableLabels = availableLabelNames()
                         )
                         val suggestion = result.suggestion
                         val relativeDateTime = parseRelativeReminderDateTime(transcript, zoneId)
@@ -229,8 +274,15 @@ fun MonthCalendarScreen(
                             categoryId = normalizeCategoryIdOrNull(suggestion.categoryId) ?: "other",
                             placeText = suggestion.placeText,
                             body = suggestion.body,
-                            labelsText = suggestion.labelsText
+                            labelsText = when (aiLabelMode) {
+                                SettingsKeys.AI_LABEL_MODE_OFF,
+                                SettingsKeys.AI_LABEL_MODE_SUGGEST -> ""
+                                else -> suggestion.labelsText
+                            }
                         )
+                        val suggestedLabelsText = suggestion.labelsText.trim().takeIf {
+                            aiLabelMode == SettingsKeys.AI_LABEL_MODE_SUGGEST && it.isNotBlank()
+                        }
                         val candidates = candidateEventsForDate(
                             date = resolvedDate,
                             selectedDate = calendarViewModel.selectedDate,
@@ -250,6 +302,9 @@ fun MonthCalendarScreen(
                                     date = resolvedDate,
                                     draft = suggestionDraft,
                                     alarmEnabled = wantsAlarm,
+                                    labelsCreatedByAi = aiLabelMode == SettingsKeys.AI_LABEL_MODE_AUTO &&
+                                        suggestion.labelsText.trim().isNotBlank(),
+                                    suggestedLabelsText = suggestedLabelsText,
                                     rawInputText = transcript
                                 )
                                 isCategoryMenuOpen = false
@@ -280,26 +335,43 @@ fun MonthCalendarScreen(
                                     body = target.body,
                                     labelsText = existingLabels.joinToString(", ")
                                 )
+                                val modifyDraftResult = if (isModifyOnly) {
+                                    buildDraftForModify(
+                                        transcript = transcript,
+                                        existing = existingDraft,
+                                        selectedDate = dateTime.toLocalDate(),
+                                        aiAssistantService = aiAssistantService,
+                                        currentRawText = calendarViewModel.rawInputByEventId[target.id],
+                                        availableLabels = availableLabelNames(),
+                                        aiLabelMode = aiLabelMode
+                                    )
+                                } else {
+                                    null
+                                }
+                                val finalDraft = modifyDraftResult?.draft ?: run {
+                                    val mergedDraft = mergeDraftForUpdate(
+                                        existing = existingDraft,
+                                        suggestion = suggestionDraft,
+                                        repeatYearlyOverride = suggestionRepeatYearly
+                                    )
+                                    when (aiLabelMode) {
+                                        SettingsKeys.AI_LABEL_MODE_AUTO -> mergedDraft.copy(
+                                            labelsText = suggestion.labelsText.trim().ifBlank { existingDraft.labelsText }
+                                        )
+                                        else -> mergedDraft.copy(labelsText = existingDraft.labelsText)
+                                    }
+                                }
                                 pendingEdit = PendingEdit(
                                     action = CrudAction.Update,
                                     eventId = target.id,
                                     date = dateTime.toLocalDate(),
-                                    draft = if (isModifyOnly) {
-                                        buildDraftForModify(
-                                            transcript = transcript,
-                                            existing = existingDraft,
-                                            selectedDate = dateTime.toLocalDate(),
-                                            aiAssistantService = aiAssistantService,
-                                            currentRawText = calendarViewModel.rawInputByEventId[target.id]
-                                        )
-                                    } else {
-                                        mergeDraftForUpdate(
-                                            existing = existingDraft,
-                                            suggestion = suggestionDraft,
-                                            repeatYearlyOverride = suggestionRepeatYearly
-                                        )
-                                    },
+                                    draft = finalDraft,
                                     alarmEnabled = if (wantsAlarm) true else existingAlarmEnabled,
+                                    labelsCreatedByAi = modifyDraftResult?.labelsCreatedByAi
+                                        ?: (aiLabelMode == SettingsKeys.AI_LABEL_MODE_AUTO &&
+                                            suggestion.labelsText.trim().isNotBlank()),
+                                    suggestedLabelsText = modifyDraftResult?.suggestedLabelsText ?: suggestedLabelsText,
+                                    originalDateText = dateTime.toLocalDate().format(dateFormatter),
                                     originalDraft = existingDraft,
                                     originalAlarmEnabled = existingAlarmEnabled,
                                     rawInputText = transcript
@@ -339,7 +411,10 @@ fun MonthCalendarScreen(
                 isAiProcessing = true
                 coroutineScope.launch {
                     try {
-                        val result = aiAssistantService.suggestSearch(transcript)
+                        val result = aiAssistantService.suggestSearch(
+                            transcript = transcript,
+                            availableLabels = availableLabelNames()
+                        )
                         val suggestion = result.suggestion
                         if (suggestion.strategy != AiSearchStrategy.AllEvents &&
                             suggestion.query.isBlank() &&
@@ -384,7 +459,12 @@ fun MonthCalendarScreen(
                             )
                             val refined = result.suggestion
                             pendingEdit = editState.copy(
-                                draft = applyFieldValue(editState.draft, refined.field, refined.value)
+                                draft = applyFieldValue(editState.draft, refined.field, refined.value),
+                                labelsCreatedByAi = if (refined.field == DraftField.Labels) {
+                                    refined.value.trim().isNotBlank()
+                                } else {
+                                    editState.labelsCreatedByAi
+                                }
                             )
                             editError = refined.missingRequired
                                 .takeIf { it.isNotEmpty() }
@@ -731,6 +811,16 @@ fun MonthCalendarScreen(
                             modifier = Modifier.height(headerIconButtonSize)
                         ) {
                             Text(text = "오늘")
+                        }
+                        TextButton(
+                            onClick = {
+                                calendarViewModel.loadLabelStats()
+                                isLabelManagerOpen = true
+                            },
+                            contentPadding = PaddingValues(horizontal = todayButtonHorizontalPadding, vertical = 0.dp),
+                            modifier = Modifier.height(headerIconButtonSize)
+                        ) {
+                            Text(text = "라벨")
                         }
                         IconButton(
                             onClick = { isSettingsOpen = true },
@@ -1712,6 +1802,238 @@ fun MonthCalendarScreen(
         }
     }
 
+    if (isLabelManagerOpen) {
+        LabelManagerDialog(
+            labels = calendarViewModel.labelStats,
+            labelFilterPresets = calendarViewModel.labelFilterPresets,
+            aiLabelMode = aiLabelMode,
+            newLabelText = newLabelText,
+            operationMessage = calendarViewModel.labelOperationMessage,
+            onAiLabelModeChange = { nextMode ->
+                aiLabelMode = nextMode
+                settingsPrefs.edit()
+                    .putString(SettingsKeys.KEY_AI_LABEL_MODE, nextMode)
+                    .apply()
+            },
+            onNewLabelTextChange = {
+                newLabelText = it
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onAddLabel = {
+                calendarViewModel.addLabel(newLabelText)
+                newLabelText = ""
+            },
+            onLabelClick = { label ->
+                selectedLabelForEvents = label
+                calendarViewModel.loadEventsForLabel(label.id)
+            },
+            onAddLabelFilterPreset = {
+                openLabelFilterPresetEditor(null)
+            },
+            onLabelFilterPresetClick = { preset ->
+                selectedLabelFilterPreset = preset
+                calendarViewModel.loadEventsForLabelFilterPreset(preset)
+            },
+            onEditLabelFilterPreset = { preset ->
+                openLabelFilterPresetEditor(preset)
+            },
+            onDeleteLabelFilterPreset = { preset ->
+                labelFilterPresetToDelete = preset
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onRenameLabel = { label ->
+                labelToRename = label
+                renameLabelText = label.name
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onMergeLabel = { label ->
+                labelToMerge = label
+                mergeTargetLabelId = calendarViewModel.labelStats.firstOrNull { it.id != label.id }?.id
+                isMergeTargetMenuOpen = false
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onDeleteLabel = { label ->
+                labelToDelete = label
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onDismiss = {
+                isLabelManagerOpen = false
+                calendarViewModel.clearLabelOperationMessage()
+            }
+        )
+    }
+
+    selectedLabelForEvents?.let { label ->
+        val linkedEvents = calendarViewModel.eventsByLabelId[label.id].orEmpty()
+        AlertDialog(
+            onDismissRequest = { selectedLabelForEvents = null },
+            confirmButton = {
+                TextButton(onClick = { selectedLabelForEvents = null }) {
+                    Text("닫기")
+                }
+            },
+            title = { Text("'${label.name}' 연결 이벤트") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "${labelSourceText(label.source)} · ${label.eventCount}개",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (linkedEvents.isEmpty()) {
+                        Text(
+                            text = "연결된 이벤트가 없습니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(linkedEvents) { event ->
+                                LabelLinkedEventRow(
+                                    event = event,
+                                    dateFormatter = dateFormatter,
+                                    timeFormatter = timeFormatter,
+                                    zoneId = zoneId,
+                                    onClick = {
+                                        selectedLabelForEvents = null
+                                        selectedEvent = event
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    selectedLabelFilterPreset?.let { preset ->
+        val matchedEvents = calendarViewModel.eventsByLabelFilterPresetId[preset.preset.id].orEmpty()
+        AlertDialog(
+            onDismissRequest = { selectedLabelFilterPreset = null },
+            confirmButton = {
+                TextButton(onClick = { selectedLabelFilterPreset = null }) {
+                    Text("닫기")
+                }
+            },
+            title = { Text("'${preset.preset.name}' 프리셋 결과") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = labelFilterPresetConditionText(preset),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "일치 이벤트 ${matchedEvents.size}개",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (matchedEvents.isEmpty()) {
+                        Text(
+                            text = "조건에 맞는 이벤트가 없습니다.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(matchedEvents) { event ->
+                                LabelLinkedEventRow(
+                                    event = event,
+                                    dateFormatter = dateFormatter,
+                                    timeFormatter = timeFormatter,
+                                    zoneId = zoneId,
+                                    onClick = {
+                                        selectedLabelFilterPreset = null
+                                        selectedEvent = event
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    labelFilterPresetToDelete?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { labelFilterPresetToDelete = null },
+            confirmButton = {
+                Button(onClick = {
+                    calendarViewModel.deleteLabelFilterPreset(preset.preset.id)
+                    labelFilterPresetToDelete = null
+                }) {
+                    Text("삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { labelFilterPresetToDelete = null }) {
+                    Text("취소")
+                }
+            },
+            title = { Text("라벨 필터 프리셋 삭제") },
+            text = {
+                Text("'${preset.preset.name}' 프리셋만 삭제합니다. 실제 라벨과 이벤트는 유지됩니다.")
+            }
+        )
+    }
+
+    if (isLabelFilterPresetEditorOpen) {
+        LabelFilterPresetEditorDialog(
+            labels = calendarViewModel.labelStats,
+            presetName = labelFilterPresetName,
+            includeMode = labelFilterPresetIncludeMode,
+            includeLabelIds = labelFilterPresetIncludeIds,
+            excludeLabelIds = labelFilterPresetExcludeIds,
+            onPresetNameChange = { labelFilterPresetName = it },
+            onIncludeModeChange = { labelFilterPresetIncludeMode = it },
+            onIncludeLabelToggle = { labelId ->
+                labelFilterPresetIncludeIds = if (labelId in labelFilterPresetIncludeIds) {
+                    labelFilterPresetIncludeIds - labelId
+                } else {
+                    labelFilterPresetIncludeIds + labelId
+                }
+                labelFilterPresetExcludeIds = labelFilterPresetExcludeIds - labelId
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            onExcludeLabelToggle = { labelId ->
+                labelFilterPresetExcludeIds = if (labelId in labelFilterPresetExcludeIds) {
+                    labelFilterPresetExcludeIds - labelId
+                } else {
+                    labelFilterPresetExcludeIds + labelId
+                }
+                labelFilterPresetIncludeIds = labelFilterPresetIncludeIds - labelId
+                calendarViewModel.clearLabelOperationMessage()
+            },
+            operationMessage = calendarViewModel.labelOperationMessage,
+            onConfirm = {
+                calendarViewModel.saveLabelFilterPreset(
+                    presetId = editingLabelFilterPresetId,
+                    name = labelFilterPresetName,
+                    includeMode = labelFilterPresetIncludeMode,
+                    includeLabelIds = labelFilterPresetIncludeIds,
+                    excludeLabelIds = labelFilterPresetExcludeIds,
+                    onResult = { saved ->
+                        if (saved) {
+                            isLabelFilterPresetEditorOpen = false
+                        }
+                    }
+                )
+            },
+            onDismiss = {
+                isLabelFilterPresetEditorOpen = false
+                calendarViewModel.clearLabelOperationMessage()
+            }
+        )
+    }
+
     if (isSearchOpen) {
         Dialog(onDismissRequest = {
             searchViewModel.resetSearch()
@@ -1804,13 +2126,15 @@ fun MonthCalendarScreen(
             confirmButton = {
                 Button(onClick = {
                     val validationResult = validateDraft(
-                        draft = editState.draft,
+                        editState = editState,
+                        dateFormatter = dateFormatter,
                         inputTimeFormatter = inputTimeFormatter
                     )
                     if (validationResult.errorMessage != null) {
                         editError = validationResult.errorMessage
                         return@Button
                     }
+                    val parsedDate = validationResult.parsedDate ?: return@Button
                     val parsedTime = validationResult.parsedTime ?: return@Button
                     val summary = editState.draft.summary.trim()
                     val body = editState.draft.body.trim()
@@ -1823,7 +2147,7 @@ fun MonthCalendarScreen(
                     when (editState.action) {
                         CrudAction.Create -> {
                             calendarViewModel.addEvent(
-                                date = editState.date,
+                                date = parsedDate,
                                 time = parsedTime,
                                 categoryId = editState.draft.categoryId.trim(),
                                 isYearlyRecurring = editState.draft.isYearlyRecurring,
@@ -1832,6 +2156,7 @@ fun MonthCalendarScreen(
                                 placeText = placeText,
                                 labels = labels,
                                 alarmEnabled = editState.alarmEnabled,
+                                labelsCreatedByAi = editState.labelsCreatedByAi,
                                 rawInputText = editState.rawInputText
                             )
                         }
@@ -1839,7 +2164,7 @@ fun MonthCalendarScreen(
                             val eventId = editState.eventId ?: return@Button
                             calendarViewModel.updateEvent(
                                 eventId = eventId,
-                                date = editState.date,
+                                date = parsedDate,
                                 time = parsedTime,
                                 categoryId = editState.draft.categoryId.trim(),
                                 isYearlyRecurring = editState.draft.isYearlyRecurring,
@@ -1848,6 +2173,7 @@ fun MonthCalendarScreen(
                                 placeText = placeText,
                                 labels = labels,
                                 alarmEnabled = editState.alarmEnabled,
+                                labelsCreatedByAi = editState.labelsCreatedByAi,
                                 rawInputText = editState.rawInputText
                             )
                         }
@@ -1878,7 +2204,6 @@ fun MonthCalendarScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "날짜: ${editState.date.format(dateFormatter)}")
                     if (editState.action == CrudAction.Update) {
                         val changes = updateChangesPreview(editState)
                         Text(
@@ -1909,6 +2234,15 @@ fun MonthCalendarScreen(
                             }
                         }
                     }
+                    OutlinedTextField(
+                        value = editState.dateText,
+                        onValueChange = {
+                            pendingEdit = editState.copy(dateText = it)
+                            editError = null
+                        },
+                        label = { Text(text = "날짜 (yyyy-MM-dd)") },
+                        singleLine = true
+                    )
                     OutlinedTextField(
                         value = editState.draft.summary,
                         onValueChange = {
@@ -2039,11 +2373,43 @@ fun MonthCalendarScreen(
                         },
                         singleLine = true
                     )
+                    editState.suggestedLabelsText?.takeIf { it.isNotBlank() }?.let { suggested ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            tonalElevation = 1.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "AI 추천 라벨: $suggested",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = {
+                                    pendingEdit = editState.copy(
+                                        draft = editState.draft.copy(
+                                            labelsText = mergeLabelsText(editState.draft.labelsText, suggested)
+                                        ),
+                                        labelsCreatedByAi = true,
+                                        suggestedLabelsText = null
+                                    )
+                                    editError = null
+                                }) {
+                                    Text("적용")
+                                }
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = editState.draft.labelsText,
                         onValueChange = {
                             pendingEdit = editState.copy(
-                                draft = editState.draft.copy(labelsText = it)
+                                draft = editState.draft.copy(labelsText = it),
+                                labelsCreatedByAi = false
                             )
                             editError = null
                         },
@@ -2171,6 +2537,7 @@ fun MonthCalendarScreen(
                             date = eventDateTime.toLocalDate(),
                             draft = existingDraft,
                             alarmEnabled = existingAlarmEnabled,
+                            originalDateText = eventDateTime.toLocalDate().format(dateFormatter),
                             originalDraft = existingDraft,
                             originalAlarmEnabled = existingAlarmEnabled,
                             rawInputText = calendarViewModel.rawInputByEventId[event.id]
@@ -2228,6 +2595,624 @@ fun MonthCalendarScreen(
                 }
             }
         )
+    }
+
+    labelToDelete?.let { label ->
+        AlertDialog(
+            onDismissRequest = { labelToDelete = null },
+            confirmButton = {
+                Button(onClick = {
+                    calendarViewModel.deleteLabel(label.id)
+                    labelToDelete = null
+                }) {
+                    Text("삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { labelToDelete = null }) {
+                    Text("취소")
+                }
+            },
+            title = { Text("라벨 삭제") },
+            text = {
+                Text(
+                    "'${label.name}' 라벨은 ${label.eventCount}개 이벤트에 연결되어 있습니다. 삭제하면 모든 이벤트에서 이 라벨만 제거됩니다."
+                )
+            }
+        )
+    }
+
+    labelToRename?.let { label ->
+        AlertDialog(
+            onDismissRequest = { labelToRename = null },
+            confirmButton = {
+                Button(onClick = {
+                    calendarViewModel.renameLabel(label.id, renameLabelText)
+                    labelToRename = null
+                }) {
+                    Text("이름 변경")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { labelToRename = null }) {
+                    Text("취소")
+                }
+            },
+            title = { Text("라벨 이름 변경") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("'${label.name}' 라벨은 ${label.eventCount}개 이벤트에 연결되어 있습니다. 이름을 바꾸면 연결된 이벤트에 새 이름이 표시됩니다.")
+                    OutlinedTextField(
+                        value = renameLabelText,
+                        onValueChange = { renameLabelText = it },
+                        label = { Text("새 라벨 이름") },
+                        singleLine = true
+                    )
+                }
+            }
+        )
+    }
+
+    labelToMerge?.let { source ->
+        val target = calendarViewModel.labelStats.firstOrNull { it.id == mergeTargetLabelId }
+        AlertDialog(
+            onDismissRequest = {
+                labelToMerge = null
+                mergeTargetLabelId = null
+                isMergeTargetMenuOpen = false
+            },
+            confirmButton = {
+                Button(
+                    enabled = target != null,
+                    onClick = {
+                        val targetId = mergeTargetLabelId ?: return@Button
+                        calendarViewModel.mergeLabels(source.id, targetId)
+                        labelToMerge = null
+                        mergeTargetLabelId = null
+                        isMergeTargetMenuOpen = false
+                    }
+                ) {
+                    Text("병합")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    labelToMerge = null
+                    mergeTargetLabelId = null
+                    isMergeTargetMenuOpen = false
+                }) {
+                    Text("취소")
+                }
+            },
+            title = { Text("라벨 병합") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("'${source.name}' 라벨의 연결을 대상 라벨로 옮기고 '${source.name}' 라벨은 삭제합니다.")
+                    Box {
+                        TextButton(onClick = { isMergeTargetMenuOpen = true }) {
+                            Text("대상: ${target?.name ?: "선택"}")
+                        }
+                        DropdownMenu(
+                            expanded = isMergeTargetMenuOpen,
+                            onDismissRequest = { isMergeTargetMenuOpen = false }
+                        ) {
+                            calendarViewModel.labelStats
+                                .filter { it.id != source.id }
+                                .forEach { candidate ->
+                                    DropdownMenuItem(
+                                        text = { Text("${candidate.name} (${candidate.eventCount}개)") },
+                                        onClick = {
+                                            mergeTargetLabelId = candidate.id
+                                            isMergeTargetMenuOpen = false
+                                        }
+                                    )
+                                }
+                        }
+                    }
+                    target?.let {
+                        Text("'${source.name}' -> '${it.name}' 병합")
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun LabelSourceBadge(source: String) {
+    val isAiGenerated = source == LABEL_SOURCE_AI
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (isAiGenerated) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = if (isAiGenerated) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ) {
+        Text(
+            text = labelSourceText(source),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun LabelLinkedEventRow(
+    event: EventEntity,
+    dateFormatter: DateTimeFormatter,
+    timeFormatter: DateTimeFormatter,
+    zoneId: ZoneId,
+    onClick: () -> Unit
+) {
+    val occurredAt = Instant.ofEpochMilli(event.occurredAt)
+        .atZone(zoneId)
+        .toLocalDateTime()
+    val categoryName = CategoryDefaults.categories
+        .firstOrNull { it.id == event.categoryId }
+        ?.displayName
+        ?: event.categoryId
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = event.summary,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${occurredAt.format(dateFormatter)} ${occurredAt.format(timeFormatter)} · $categoryName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun labelSourceText(source: String): String {
+    return if (source == LABEL_SOURCE_AI) "AI 생성" else "직접 생성"
+}
+
+@Composable
+private fun LabelFilterPresetRow(
+    preset: LabelFilterPresetSummary,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = preset.preset.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = labelFilterPresetConditionText(preset),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                TextButton(onClick = onEdit) {
+                    Text("수정")
+                }
+                TextButton(onClick = onDelete) {
+                    Text("삭제")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabelFilterPresetEditorDialog(
+    labels: List<LabelWithEventCount>,
+    presetName: String,
+    includeMode: String,
+    includeLabelIds: Set<Long>,
+    excludeLabelIds: Set<Long>,
+    operationMessage: String?,
+    onPresetNameChange: (String) -> Unit,
+    onIncludeModeChange: (String) -> Unit,
+    onIncludeLabelToggle: (Long) -> Unit,
+    onExcludeLabelToggle: (Long) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 4.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 360.dp, max = 680.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("라벨 필터 프리셋", style = MaterialTheme.typography.titleLarge)
+                OutlinedTextField(
+                    value = presetName,
+                    onValueChange = onPresetNameChange,
+                    label = { Text("프리셋 이름") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("포함 조건", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = includeMode == LABEL_FILTER_INCLUDE_MODE_ANY,
+                            onClick = { onIncludeModeChange(LABEL_FILTER_INCLUDE_MODE_ANY) },
+                            label = { Text("하나라도 포함") }
+                        )
+                        FilterChip(
+                            selected = includeMode == LABEL_FILTER_INCLUDE_MODE_ALL,
+                            onClick = { onIncludeModeChange(LABEL_FILTER_INCLUDE_MODE_ALL) },
+                            label = { Text("모두 포함") }
+                        )
+                    }
+                }
+                LabelFilterPresetLabelList(
+                    title = "포함 라벨",
+                    labels = labels,
+                    selectedLabelIds = includeLabelIds,
+                    disabledLabelIds = excludeLabelIds,
+                    onToggle = onIncludeLabelToggle
+                )
+                LabelFilterPresetLabelList(
+                    title = "제외 라벨",
+                    labels = labels,
+                    selectedLabelIds = excludeLabelIds,
+                    disabledLabelIds = includeLabelIds,
+                    onToggle = onExcludeLabelToggle
+                )
+                operationMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("취소")
+                    }
+                    Button(
+                        enabled = presetName.trim().isNotBlank() &&
+                            (includeLabelIds.isNotEmpty() || excludeLabelIds.isNotEmpty()),
+                        onClick = onConfirm
+                    ) {
+                        Text("저장")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabelFilterPresetLabelList(
+    title: String,
+    labels: List<LabelWithEventCount>,
+    selectedLabelIds: Set<Long>,
+    disabledLabelIds: Set<Long>,
+    onToggle: (Long) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        if (labels.isEmpty()) {
+            Text(
+                text = "선택할 라벨이 없습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            labels.forEach { label ->
+                val disabled = label.id in disabledLabelIds
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !disabled) { onToggle(label.id) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = label.id in selectedLabelIds,
+                        enabled = !disabled,
+                        onCheckedChange = { onToggle(label.id) }
+                    )
+                    Text(
+                        text = label.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (disabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${label.eventCount}개",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun labelFilterPresetConditionText(preset: LabelFilterPresetSummary): String {
+    val includeText = if (preset.includeLabels.isEmpty()) {
+        "전체"
+    } else {
+        "${labelFilterIncludeModeText(preset.preset.includeMode)}: ${labelNamesText(preset.includeLabels)}"
+    }
+    val excludeText = if (preset.excludeLabels.isEmpty()) {
+        null
+    } else {
+        "제외: ${labelNamesText(preset.excludeLabels)}"
+    }
+    return listOfNotNull(includeText, excludeText).joinToString(" · ")
+}
+
+private fun labelFilterIncludeModeText(includeMode: String): String {
+    return if (includeMode == LABEL_FILTER_INCLUDE_MODE_ALL) "모두 포함" else "하나라도 포함"
+}
+
+private fun labelNamesText(labels: List<LabelWithEventCount>): String {
+    return labels.joinToString(", ") { it.name }
+}
+
+@Composable
+private fun LabelManagerDialog(
+    labels: List<LabelWithEventCount>,
+    labelFilterPresets: List<LabelFilterPresetSummary>,
+    aiLabelMode: String,
+    newLabelText: String,
+    operationMessage: String?,
+    onAiLabelModeChange: (String) -> Unit,
+    onNewLabelTextChange: (String) -> Unit,
+    onAddLabel: () -> Unit,
+    onLabelClick: (LabelWithEventCount) -> Unit,
+    onAddLabelFilterPreset: () -> Unit,
+    onLabelFilterPresetClick: (LabelFilterPresetSummary) -> Unit,
+    onEditLabelFilterPreset: (LabelFilterPresetSummary) -> Unit,
+    onDeleteLabelFilterPreset: (LabelFilterPresetSummary) -> Unit,
+    onRenameLabel: (LabelWithEventCount) -> Unit,
+    onMergeLabel: (LabelWithEventCount) -> Unit,
+    onDeleteLabel: (LabelWithEventCount) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 4.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 360.dp, max = 680.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "라벨 관리",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onDismiss) {
+                        Text("닫기")
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("AI 라벨 추천", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = aiLabelMode == SettingsKeys.AI_LABEL_MODE_OFF,
+                            onClick = { onAiLabelModeChange(SettingsKeys.AI_LABEL_MODE_OFF) },
+                            label = { Text("끄기") }
+                        )
+                        FilterChip(
+                            selected = aiLabelMode == SettingsKeys.AI_LABEL_MODE_SUGGEST,
+                            onClick = { onAiLabelModeChange(SettingsKeys.AI_LABEL_MODE_SUGGEST) },
+                            label = { Text("추천만") }
+                        )
+                        FilterChip(
+                            selected = aiLabelMode == SettingsKeys.AI_LABEL_MODE_AUTO,
+                            onClick = { onAiLabelModeChange(SettingsKeys.AI_LABEL_MODE_AUTO) },
+                            label = { Text("자동 적용") }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newLabelText,
+                        onValueChange = onNewLabelTextChange,
+                        label = { Text("새 라벨") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        enabled = newLabelText.trim().isNotBlank(),
+                        onClick = onAddLabel
+                    ) {
+                        Text("추가")
+                    }
+                }
+
+                operationMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "라벨 필터 프리셋",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = onAddLabelFilterPreset) {
+                            Text("만들기")
+                        }
+                    }
+                    if (labelFilterPresets.isEmpty()) {
+                        Text(
+                            text = "저장된 프리셋이 없습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 180.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(labelFilterPresets) { preset ->
+                                LabelFilterPresetRow(
+                                    preset = preset,
+                                    onClick = { onLabelFilterPresetClick(preset) },
+                                    onEdit = { onEditLabelFilterPreset(preset) },
+                                    onDelete = { onDeleteLabelFilterPreset(preset) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                if (labels.isEmpty()) {
+                    Text(
+                        text = "등록된 라벨이 없습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(labels) { label ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onLabelClick(label) },
+                                shape = MaterialTheme.shapes.medium,
+                                tonalElevation = 1.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = label.name,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+                                                LabelSourceBadge(source = label.source)
+                                            }
+                                            Text(
+                                                text = "연결된 이벤트 ${label.eventCount}개",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                                    ) {
+                                        TextButton(onClick = { onRenameLabel(label) }) {
+                                            Text("이름변경")
+                                        }
+                                        TextButton(
+                                            enabled = labels.size > 1,
+                                            onClick = { onMergeLabel(label) }
+                                        ) {
+                                            Text("병합")
+                                        }
+                                        TextButton(onClick = { onDeleteLabel(label) }) {
+                                            Text("삭제")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2463,43 +3448,62 @@ private data class PendingEdit(
     val action: CrudAction,
     val eventId: String?,
     val date: LocalDate,
+    val dateText: String = date.toString(),
     val draft: EventDraft,
     val alarmEnabled: Boolean,
+    val labelsCreatedByAi: Boolean = false,
+    val suggestedLabelsText: String? = null,
+    val originalDateText: String? = null,
     val originalDraft: EventDraft? = null,
     val originalAlarmEnabled: Boolean? = null,
     val rawInputText: String? = null
 )
 
+private data class ModifyDraftResult(
+    val draft: EventDraft,
+    val suggestedLabelsText: String?,
+    val labelsCreatedByAi: Boolean
+)
+
 private data class DraftValidationResult(
+    val parsedDate: LocalDate?,
     val parsedTime: LocalTime?,
     val errorMessage: String?
 )
 
 private fun validateDraft(
-    draft: EventDraft,
+    editState: PendingEdit,
+    dateFormatter: DateTimeFormatter,
     inputTimeFormatter: DateTimeFormatter
 ): DraftValidationResult {
+    val draft = editState.draft
     val summary = draft.summary.trim()
     if (summary.isBlank()) {
-        return DraftValidationResult(parsedTime = null, errorMessage = "제목을 입력하세요.")
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "제목을 입력하세요.")
     }
     if (draft.categoryId.isBlank()) {
-        return DraftValidationResult(parsedTime = null, errorMessage = "카테고리를 선택하세요.")
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "카테고리를 선택하세요.")
     }
     if (draft.categoryId.trim() !in CategoryDefaults.categoryIds) {
-        return DraftValidationResult(parsedTime = null, errorMessage = "유효한 카테고리를 선택하세요.")
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "유효한 카테고리를 선택하세요.")
+    }
+    val parsedDate = runCatching {
+        LocalDate.parse(editState.dateText.trim(), dateFormatter)
+    }.getOrNull()
+    if (parsedDate == null) {
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "날짜 형식은 yyyy-MM-dd 입니다.")
     }
     val parsedTime = runCatching {
         LocalTime.parse(draft.timeText.trim(), inputTimeFormatter)
     }.getOrNull()
     if (parsedTime == null) {
-        return DraftValidationResult(parsedTime = null, errorMessage = "시간 형식은 HH:mm 입니다.")
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "시간 형식은 HH:mm 입니다.")
     }
     val body = draft.body.trim()
     if (body.isBlank()) {
-        return DraftValidationResult(parsedTime = null, errorMessage = "내용을 입력하세요.")
+        return DraftValidationResult(parsedDate = null, parsedTime = null, errorMessage = "내용을 입력하세요.")
     }
-    return DraftValidationResult(parsedTime = parsedTime, errorMessage = null)
+    return DraftValidationResult(parsedDate = parsedDate, parsedTime = parsedTime, errorMessage = null)
 }
 
 private fun valueOfField(draft: EventDraft, field: DraftField): String = when (field) {
@@ -2566,8 +3570,10 @@ private suspend fun buildDraftForModify(
     existing: EventDraft,
     selectedDate: LocalDate,
     aiAssistantService: AiAssistantService,
-    currentRawText: String?
-): EventDraft {
+    currentRawText: String?,
+    availableLabels: List<String>,
+    aiLabelMode: String
+): ModifyDraftResult {
     val patchResult = aiAssistantService.suggestModifyPatch(
         transcript = transcript,
         selectedDate = selectedDate,
@@ -2577,17 +3583,28 @@ private suspend fun buildDraftForModify(
         currentPlaceText = existing.placeText,
         currentBody = existing.body,
         currentLabelsText = existing.labelsText,
-        currentRawText = currentRawText
+        currentRawText = currentRawText,
+        availableLabels = availableLabels
     )
     val patch = patchResult.suggestion
+    val suggestedLabels = patch.labelsText?.trim()?.takeIf { it.isNotBlank() }
+    val labelsText = when (aiLabelMode) {
+        SettingsKeys.AI_LABEL_MODE_OFF,
+        SettingsKeys.AI_LABEL_MODE_SUGGEST -> existing.labelsText
+        else -> patch.labelsText ?: existing.labelsText
+    }
 
-    return existing.copy(
-        summary = patch.summary ?: existing.summary,
-        timeText = patch.timeText ?: existing.timeText,
-        categoryId = patch.categoryId ?: existing.categoryId,
-        placeText = patch.placeText ?: existing.placeText,
-        body = patch.body ?: existing.body,
-        labelsText = patch.labelsText ?: existing.labelsText
+    return ModifyDraftResult(
+        draft = existing.copy(
+            summary = patch.summary ?: existing.summary,
+            timeText = patch.timeText ?: existing.timeText,
+            categoryId = patch.categoryId ?: existing.categoryId,
+            placeText = patch.placeText ?: existing.placeText,
+            body = patch.body ?: existing.body,
+            labelsText = labelsText
+        ),
+        suggestedLabelsText = if (aiLabelMode == SettingsKeys.AI_LABEL_MODE_SUGGEST) suggestedLabels else null,
+        labelsCreatedByAi = aiLabelMode == SettingsKeys.AI_LABEL_MODE_AUTO && suggestedLabels != null
     )
 }
 
@@ -2603,6 +3620,14 @@ private fun updateChangesPreview(editState: PendingEdit): List<UpdateChange> {
     val now = editState.draft
     val changes = mutableListOf<UpdateChange>()
 
+    val originalDateText = editState.originalDateText
+    if (originalDateText != null && originalDateText.trim() != editState.dateText.trim()) {
+        changes += UpdateChange(
+            label = "날짜",
+            before = previewValue(originalDateText),
+            after = previewValue(editState.dateText)
+        )
+    }
     if (original.summary.trim() != now.summary.trim()) {
         changes += UpdateChange(
             label = "제목",
@@ -2676,6 +3701,16 @@ private fun previewCategory(categoryId: String): String {
         ?.displayName
         ?: normalized
     return "\"$display\""
+}
+
+private fun mergeLabelsText(current: String, suggested: String): String {
+    val seen = mutableSetOf<String>()
+    return (current.split(",") + suggested.split(","))
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .filter { seen.add(it.lowercase()) }
+        .take(MAX_LABELS_PER_EVENT)
+        .joinToString(", ")
 }
 
 private fun wantsAlarmFromTranscript(transcript: String): Boolean {

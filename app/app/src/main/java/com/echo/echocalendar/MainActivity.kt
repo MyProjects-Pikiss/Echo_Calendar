@@ -115,7 +115,9 @@ class MainActivity : ComponentActivity() {
                         container.updateEventUseCase,
                         container.database.eventAlarmDao(),
                         container.eventAlarmScheduler,
-                        container.database.eventRawInputDao()
+                        container.database.eventRawInputDao(),
+                        container.database.labelDao(),
+                        container.database.labelFilterPresetDao()
                     )
                 )
                 val searchViewModel = viewModel<SearchViewModel>(

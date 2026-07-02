@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.echo.echocalendar.alarm.EventAlarmScheduler
 import com.echo.echocalendar.data.local.EventAlarmDao
 import com.echo.echocalendar.data.local.EventRawInputDao
+import com.echo.echocalendar.data.local.LabelDao
+import com.echo.echocalendar.data.local.LabelFilterPresetDao
 import com.echo.echocalendar.domain.usecase.DeleteEventUseCase
 import com.echo.echocalendar.domain.usecase.GetAllEventsUseCase
 import com.echo.echocalendar.domain.usecase.GetEventByIdUseCase
@@ -38,7 +40,9 @@ class CalendarViewModelFactory(
     private val updateEventUseCase: UpdateEventUseCase,
     private val eventAlarmDao: EventAlarmDao,
     private val eventAlarmScheduler: EventAlarmScheduler,
-    private val eventRawInputDao: EventRawInputDao
+    private val eventRawInputDao: EventRawInputDao,
+    private val labelDao: LabelDao,
+    private val labelFilterPresetDao: LabelFilterPresetDao
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CalendarViewModel::class.java)) {
@@ -54,7 +58,9 @@ class CalendarViewModelFactory(
                 updateEventUseCase,
                 eventAlarmDao,
                 eventAlarmScheduler,
-                eventRawInputDao
+                eventRawInputDao,
+                labelDao,
+                labelFilterPresetDao
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

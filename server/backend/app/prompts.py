@@ -22,7 +22,7 @@ KNOWN_CATEGORY_IDS = [
 ]
 
 
-def input_prompts(transcript: str, selected_date: str) -> tuple[str, str]:
+def input_prompts(transcript: str, selected_date: str, available_labels: list[str] | None = None) -> tuple[str, str]:
     system = (
         "You convert Korean calendar input into strict JSON for Echo Calendar. "
         "Return JSON object only, no markdown, no extra text. "
@@ -41,6 +41,8 @@ def input_prompts(transcript: str, selected_date: str) -> tuple[str, str]:
         "Remove only request boilerplate such as '기록해줘', '추가해줘', '등록해줘'. "
         "labels are optional search-assist tags, return 0..5 items. "
         "Prefer concise reusable labels; avoid creating too many specific one-off labels. "
+        "If availableLabels is provided, prefer reusing labels from availableLabels when they fit the transcript. "
+        "If no available label fits but the transcript clearly supports reusable search tags, you may suggest new grounded labels. "
         "Do not invent labels that are not grounded in the transcript. "
         "If the transcript does not clearly supply label text, return an empty labels array. "
         "Example input: '내일 9시 회의'. "
@@ -52,13 +54,14 @@ def input_prompts(transcript: str, selected_date: str) -> tuple[str, str]:
             "mode": "input",
             "transcript": transcript,
             "selectedDate": selected_date,
+            "availableLabels": _compact_labels(available_labels or []),
         },
         ensure_ascii=False,
     )
     return system, user
 
 
-def search_prompts(transcript: str) -> tuple[str, str]:
+def search_prompts(transcript: str, available_labels: list[str] | None = None) -> tuple[str, str]:
     system = (
         "You convert Korean search requests into strict JSON for Echo Calendar. "
         "Return JSON object only. "
@@ -77,6 +80,8 @@ def search_prompts(transcript: str) -> tuple[str, str]:
         "label means use labels. "
         "keyword means use query text. "
         "combined means two or more mechanisms are used together. "
+        "If availableLabels is provided and the request matches one or more of those labels, prefer strategy='label' or 'combined' with labels set to the matching label names. "
+        "Labels in the response may reuse availableLabels or include grounded new labels when useful for search. "
         "For '여태까지/지금까지/전체/전부/모든 기록' style requests, choose strategy='all_events' so all saved events are included. "
         "For 'n일부터 m일까지' or explicit date range requests, fill dateFrom/dateTo exactly. "
         "Example input: '지난주 병원 일정 찾아줘'. "
@@ -87,6 +92,7 @@ def search_prompts(transcript: str) -> tuple[str, str]:
         {
             "mode": "search",
             "transcript": transcript,
+            "availableLabels": _compact_labels(available_labels or []),
         },
         ensure_ascii=False,
     )
@@ -127,6 +133,7 @@ def modify_prompts(
     current_place_text: str,
     current_body: str,
     current_labels: list[str],
+    available_labels: list[str] | None = None,
 ) -> tuple[str, str]:
     system = (
         "You convert a Korean event-modification request into one JSON patch for Echo Calendar. "
@@ -146,6 +153,8 @@ def modify_prompts(
         f"categoryId must be one of: {', '.join(KNOWN_CATEGORY_IDS)} or null. "
         "labels must be an array or null. "
         "For labels, include concise normalized tags without '#'. "
+        "If availableLabels is provided, prefer reusing labels from availableLabels when they fit the requested label change. "
+        "If no available label fits but the transcript clearly supports reusable search tags, you may suggest new grounded labels. "
         "When selecting categoryId, infer from meaning (e.g., 병원/진료->medical, 회의/업무->work, 식사/밥->dining) if reasonable. "
         "Inference boundary: category inference is allowed without explicit keyword, "
         "but do NOT infer summary/place/body/labels unless the transcript explicitly asks for those fields. "
@@ -168,7 +177,23 @@ def modify_prompts(
             "currentPlaceText": current_place_text,
             "currentBody": current_body,
             "currentLabels": current_labels,
+            "availableLabels": _compact_labels(available_labels or []),
         },
         ensure_ascii=False,
     )
     return system, user
+
+
+def _compact_labels(labels: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in labels:
+        label = str(raw).strip()
+        key = label.casefold()
+        if not label or len(label) > 20 or "," in label or key in seen:
+            continue
+        seen.add(key)
+        result.append(label)
+        if len(result) >= 100:
+            break
+    return result

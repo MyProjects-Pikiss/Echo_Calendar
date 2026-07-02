@@ -94,8 +94,12 @@ class AiAssistantInterpreterTest {
         val service = AiAssistantService(
             apiGateway = object : AiApiGateway {
                 override suspend fun checkAppUpdate(currentVersionCode: Int) = null
-                override suspend fun interpretInput(transcript: String, selectedDate: LocalDate) = null
-                override suspend fun interpretSearch(transcript: String) = null
+                override suspend fun interpretInput(
+                    transcript: String,
+                    selectedDate: LocalDate,
+                    availableLabels: List<String>
+                ) = null
+                override suspend fun interpretSearch(transcript: String, availableLabels: List<String>) = null
                 override suspend fun interpretModify(
                     transcript: String,
                     selectedDate: LocalDate,
@@ -104,7 +108,8 @@ class AiAssistantInterpreterTest {
                     currentCategoryId: String,
                     currentPlaceText: String,
                     currentBody: String,
-                    currentLabels: List<String>
+                    currentLabels: List<String>,
+                    availableLabels: List<String>
                 ) = null
                 override suspend fun refineField(
                     transcript: String,

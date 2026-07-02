@@ -2,8 +2,8 @@
 # Edit the source config file, not this generated file.
 
 SERVER_BASE_URL=https://echo-calendar.win
-APP_VERSION_CODE=27
-APP_VERSION_NAME=0.9.35
+APP_VERSION_CODE=31
+APP_VERSION_NAME=0.9.43
 
 AI_API_TIMEOUT_MS=30000
 HOLIDAY_SYNC_TIMEOUT_MS=5000

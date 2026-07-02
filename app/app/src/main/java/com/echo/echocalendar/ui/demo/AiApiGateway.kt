@@ -17,8 +17,12 @@ import org.json.JSONObject
 
 interface AiApiGateway {
     suspend fun checkAppUpdate(currentVersionCode: Int): AppUpdateInfo?
-    suspend fun interpretInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion?
-    suspend fun interpretSearch(transcript: String): AiSearchSuggestion?
+    suspend fun interpretInput(
+        transcript: String,
+        selectedDate: LocalDate,
+        availableLabels: List<String> = emptyList()
+    ): AiInputSuggestion?
+    suspend fun interpretSearch(transcript: String, availableLabels: List<String> = emptyList()): AiSearchSuggestion?
     suspend fun interpretModify(
         transcript: String,
         selectedDate: LocalDate,
@@ -27,7 +31,8 @@ interface AiApiGateway {
         currentCategoryId: String,
         currentPlaceText: String,
         currentBody: String,
-        currentLabels: List<String>
+        currentLabels: List<String>,
+        availableLabels: List<String> = emptyList()
     ): AiModifyPatch?
     suspend fun refineField(
         transcript: String,
@@ -58,11 +63,16 @@ class HttpAiApiGateway(
         )
     }
 
-    override suspend fun interpretInput(transcript: String, selectedDate: LocalDate): AiInputSuggestion? {
+    override suspend fun interpretInput(
+        transcript: String,
+        selectedDate: LocalDate,
+        availableLabels: List<String>
+    ): AiInputSuggestion? {
         val request = JSONObject()
             .put("mode", AiMode.Input.value)
             .put("transcript", transcript)
             .put("selectedDate", selectedDate.toString())
+            .put("availableLabels", JSONArray(normalizeAvailableLabels(availableLabels)))
         val json = postJson("/ai/input-interpret", request) ?: return null
         if (json.optString("mode") != AiMode.Input.value) return null
         val intent = AiCrudIntent.entries.firstOrNull {
@@ -87,10 +97,11 @@ class HttpAiApiGateway(
         )
     }
 
-    override suspend fun interpretSearch(transcript: String): AiSearchSuggestion? {
+    override suspend fun interpretSearch(transcript: String, availableLabels: List<String>): AiSearchSuggestion? {
         val request = JSONObject()
             .put("mode", AiMode.Search.value)
             .put("transcript", transcript)
+            .put("availableLabels", JSONArray(normalizeAvailableLabels(availableLabels)))
         val json = postJson("/ai/search-interpret", request) ?: return null
         if (json.optString("mode") != AiMode.Search.value) return null
         val strategy = parseSearchStrategy(json.optNullableString("strategy"))
@@ -167,7 +178,8 @@ class HttpAiApiGateway(
         currentCategoryId: String,
         currentPlaceText: String,
         currentBody: String,
-        currentLabels: List<String>
+        currentLabels: List<String>,
+        availableLabels: List<String>
     ): AiModifyPatch? {
         val request = JSONObject()
             .put("mode", AiMode.Modify.value)
@@ -179,6 +191,7 @@ class HttpAiApiGateway(
             .put("currentPlaceText", currentPlaceText)
             .put("currentBody", currentBody)
             .put("currentLabels", JSONArray(currentLabels))
+            .put("availableLabels", JSONArray(normalizeAvailableLabels(availableLabels)))
         val json = postJson("/ai/modify-interpret", request) ?: return null
         if (json.optString("mode") != AiMode.Modify.value) return null
         val summary = json.optNullableString("summary")?.trim()?.takeIf { it.isNotBlank() }
@@ -389,4 +402,12 @@ private fun normalizeCategoryIdOrNull(raw: String): String? {
             candidate.displayName.equals(normalized, ignoreCase = true)
     }
     return category?.id
+}
+
+private fun normalizeAvailableLabels(labels: List<String>): List<String> {
+    return labels
+        .map { it.trim() }
+        .filter { it.isNotBlank() && it.length <= 20 && "," !in it }
+        .distinctBy { it.lowercase() }
+        .take(100)
 }

@@ -6,8 +6,8 @@
 
 - 백엔드는 `server/docker-compose.yml` 기준으로 실행합니다.
 - `backend`, `usage-consumer`, `kafka`, `cloudflared`가 Docker Compose로 함께 올라갑니다.
-- 운영 데이터와 비밀값은 repo 밖 `%USERPROFILE%\Echo_Calendar`에 둡니다.
-- repo 안의 `server/backend/data`, `server/downloads`, `server/logs`는 런타임 원본으로 쓰지 않습니다.
+- 운영 데이터, 비밀값, 터널 인증, APK 배포 파일은 repo 밖 `%USERPROFILE%\Echo_Calendar`에 둡니다.
+- repo 안의 `server/backend/data`, `server/downloads`는 런타임 원본으로 쓰지 않습니다.
 
 ## 준비 파일
 
@@ -44,7 +44,6 @@
   downloads\
     echo_calendar.apk
     app_version.env
-  logs\
 ```
 
 `config/echo-calendar.config.env`의 경로는 보통 아래처럼 둡니다.
@@ -55,7 +54,6 @@ CLOUDFLARED_DIR=%USERPROFILE%\Echo_Calendar\cloudflared
 APP_SIGNING_CONFIG_PATH=%USERPROFILE%\Echo_Calendar\secrets\app-signing.env
 BACKEND_DATA_DIR=%USERPROFILE%\Echo_Calendar\data
 BACKEND_DOWNLOADS_DIR=%USERPROFILE%\Echo_Calendar\downloads
-BACKEND_LOGS_DIR=%USERPROFILE%\Echo_Calendar\logs
 ```
 
 ## 실행

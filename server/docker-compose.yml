@@ -37,9 +37,6 @@ services:
       - type: bind
         source: ${BACKEND_DOWNLOADS_DIR:?set BACKEND_DOWNLOADS_DIR in server/.env}
         target: /app/downloads
-      - type: bind
-        source: ${BACKEND_LOGS_DIR:?set BACKEND_LOGS_DIR in server/.env}
-        target: /app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
       interval: 30s
@@ -65,9 +62,6 @@ services:
       - type: bind
         source: ${BACKEND_DATA_DIR:?set BACKEND_DATA_DIR in server/.env}
         target: /app/data
-      - type: bind
-        source: ${BACKEND_LOGS_DIR:?set BACKEND_LOGS_DIR in server/.env}
-        target: /app/logs
     restart: unless-stopped
 
   cloudflared:

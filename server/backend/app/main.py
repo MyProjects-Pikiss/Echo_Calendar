@@ -710,7 +710,7 @@ async def input_interpret(request: Request) -> JSONResponse:
 
     if llm_client.enabled:
         try:
-            system_prompt, user_prompt = input_prompts(transcript, selected_date)
+            system_prompt, user_prompt = input_prompts(transcript, selected_date, req.availableLabels)
             completion = await llm_client.json_completion(system_prompt, user_prompt)
             guarded = ensure_input_response(completion.payload, transcript, selected_date)
             if not guarded.labels:
@@ -820,7 +820,7 @@ async def search_interpret(request: Request) -> JSONResponse:
 
     if llm_client.enabled:
         try:
-            system_prompt, user_prompt = search_prompts(transcript)
+            system_prompt, user_prompt = search_prompts(transcript, req.availableLabels)
             completion = await llm_client.json_completion(system_prompt, user_prompt)
             guarded = ensure_search_response(completion.payload, transcript)
             _record_ai_usage(
@@ -1050,6 +1050,7 @@ async def modify_interpret(request: Request) -> JSONResponse:
                 current_place_text=req.currentPlaceText,
                 current_body=req.currentBody,
                 current_labels=req.currentLabels,
+                available_labels=req.availableLabels,
             )
             completion = await llm_client.json_completion(system_prompt, user_prompt)
             guarded = ensure_modify_response(completion.payload, transcript)
